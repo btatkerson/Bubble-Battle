@@ -12,6 +12,8 @@
             ID issues. 
 
             All objects created are able to directly copy themselves into the global catalog.
+
+            This was originally built with the inspiration from the Neverwinter Nights' toolset. 
 '''
 
 
@@ -26,7 +28,7 @@ class catalog(verbose):
         self.__catalog = {}
 
     def get_catalog(self):
-        return dict(self.__catalog)
+        return self.__catalog.copy()
 
     def find_resource(self, res_ref=None):
         '''
@@ -37,11 +39,29 @@ class catalog(verbose):
         Use catalog.copy_resource() to get a UNIQUE copy of the object from the catalog
         '''
         temp_ref = clean_res_ref(res_ref)
-        try:
+        if temp_ref in self.__catalog.keys():
             return self.__catalog[temp_ref]
-        except KeyError:
+        else:
             self.verbo(("Resource \'", clean_res_ref(temp_ref), "\' not found."))
             return None
+
+    def find_resources_by_prefix(self, prefix=None, return_key_list=False):
+        temp=[]
+        prefix=clean_res_ref(prefix)
+        if type(prefix) == str:
+            k=self.get_catalog().keys()
+            for i in k:
+                if i.startswith(prefix):
+                    temp.append(i)
+            if return_key_list:
+                return temp
+
+            d_temp = {}
+            for i in temp:
+                d_temp[i]=self.get_catalog()[i]
+            return d_temp
+
+        return [] if return_key_list else {}
 
     def copy_resource(self, res_ref=None):
         if self.find_resource(res_ref):
@@ -96,6 +116,67 @@ def clean_res_ref(res_ref=None):
             temp+=i
 
     return temp
+
+class eventManager():
+    def __init__(self):
+        self.__evts={}
+
+    def getEvent(self,evt=None):
+        if evt in self.__evts.keys():
+            return self.__evts[evt]
+        return None
+        
+    def setEvent(self,evt=None,value=0):
+        if evt != None:
+            self.__evts[evt] = value
+            return self.__evts[evt] 
+        return None
+
+    def getEventDictionary(self,return_copy=True):
+        '''
+        getEventDictionary(bool)
+
+        This returns a copy of the internal event dictionary or the actual
+        one depending on input. 
+
+        return_copy - By default set to True, returns a copy of the internal
+                      dictionary. There is very little reason to send the
+                      internal dictionary's address to any other place in the 
+                      program.
+        '''
+        if return_copy:
+            return self.__evts.copy()
+        return self.__evts
+
+    def setEventDictionary(self, evtDict=None, copy=True, override=False):
+        '''
+        setEventDictionary(eventManager, bool, bool)
+        setEventDictionary(dict, bool, bool)
+
+        This sets the event dictionary. 
+        
+         evtDict - If given an eventManager, this will copy or use the internal
+                   event dictionary inside of it.
+
+        override - Prevents overriding an event dictionary already in place
+
+            copy - If eventManager is given, a copy of the eventManager's internal
+                   event dictionary is set for this eventManager's internal dict.
+
+                   If dict is given, a copy of the provided dict is used instead 
+                   of the provided dict itself.
+        '''
+        if isinstance(evtDict,eventManager):
+            if override or not self.__evts:
+                self.__evts = evtDict.getEventDictionary(copy)
+                return 1
+        elif type(evtDict)==dict:
+            if override or not self.__evts:
+                self.__evts = evtDict.copy() if copy else evtDict
+                return 1
+        return 0
+
+
 
 
 class blueprint():
@@ -274,3 +355,6 @@ class blueprint():
         self.__CAT.verbo_Activate()
 
 CAT = catalog()
+
+def getCatalog():
+    return CAT

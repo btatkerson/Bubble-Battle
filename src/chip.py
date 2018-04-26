@@ -1,9 +1,10 @@
 #!/usr/bin/python3
 
 from PyQt4 import QtCore, QtGui
-from timer import timer
+from src.timer import timer
+from src.timerManager import timerManager
 import pymunk as pm
-import blueprint as bp
+import src.blueprint as bp
 import random
 import sys
 import time
@@ -12,30 +13,28 @@ BODY_TYPE_STATIC = pm.Body.STATIC
 BODY_TYPE_DYNAMIC = pm.Body.DYNAMIC
 BODY_TYPE_KINEMATIC = pm.Body.KINEMATIC
 
-class mainWindow(QtGui.QWidget):
-    def __init__(self, parent=None):
-        QtGui.QWidget.__init__(self,parent=parent)
-        self.setFixedSize(824,612)
-        self.mainLayout = QtGui.QGridLayout(self)
-        self.setLayout(self.mainLayout)
+app=QtGui.QApplication(sys.argv)
 
-        self.gameView = QtGui.QGraphicsView(self)
-        self.gameScene = gameWindow(self.gameView)
-        self.mainLayout.addWidget(self.gameView,1,1,1,1)
+def getBlueprintCatalog():
+    return bp.getCatalog() or bp.catalog()
 
-        self.gameView.setScene(self.gameScene)
-        self.gameView.setSceneRect(0,0,800,-600)
-        #self.gameView.scale(1,-1)
-
-class ChipObjectCircle(QtGui.QGraphicsEllipseItem,pm.Circle,bp.blueprint):
-    def __init__(self,body_type=BODY_TYPE_DYNAMIC,mass=1,radius=10,offset=(0,0),inner_radius=0,density=None,friction=None,elasticity=None,color=None,scene=None,resource_ref_name=None):
+class ChipObjectBox(QtGui.QGraphicsRectItem,pm.Poly,bp.blueprint):
+    def __init__(self,body_type=BODY_TYPE_DYNAMIC,mass=1,width=10,height=10,offset=(0,0),density=None,friction=None,elasticity=None,color=None,scene=None,resource_ref_name=None):
         #QtGui.QGraphicsEllipseItem.__init__(-radius,-radius,radius*2,radius*2)
-        QtGui.QGraphicsEllipseItem.__init__(0,0,radius*2,radius*2,scene=scene)
-        bp.blueprint.__init__(self,'ch_obj_cir')
+        QtGui.QGraphicsRectItem.__init__(self,0,0,width,height,scene=scene)
+        #QtGui.QGraphicsRectItem.__init__(self,-width/2,-height/2,width/2,height/2,scene=scene)
+        bp.blueprint.__init__(self,'ch_obj_box')
+        self.__eventManager=bp.eventManager()
+        self.eventManager=self.getEventManager
+        
 
-        inertia = pm.moment_for_circle(mass,inner_radius,radius,offset)
+        inertia = pm.moment_for_box(mass,(width,height))
         self.chipBody = pm.Body(mass,inertia,body_type)
-        pm.Circle.__init__(self, chipBody, radius, offset)
+
+        pm.Poly.__init__(self,self.chipBody, self.__generate_coords(width,height))
+
+        self.cx, self.cy = pm.Vec2d(self.center_of_gravity)
+
         if density:
             self.density=density
         if friction:
@@ -43,33 +42,175 @@ class ChipObjectCircle(QtGui.QGraphicsEllipseItem,pm.Circle,bp.blueprint):
         if elasticity:
             self.elasticity=elasticity
         if color:
-            self.setBrush(color)
-            self.setPen(color)
+            self.setBrushColor(color=color)
+            self.setPenColor(color=color)
 
         self.set_ref_name(resource_ref_name)
         self.add_self_to_catalog()
+        self.show()
+        self.updateChipObject()
+
+    def __generate_coords(self,width,height=1):
+        #return [[-width/2,-height/2],[width/2,-height/2],[width/2,height/2],[-width/2,height/2]]
+        return [[0,0],[width,0],[width,height],[0,height]]
+
+
+    def getEventManager(self):
+        return self.__eventManager
+
+    def setBrushColor(self,r=0,g=0,b=0,alpha=255,color=None):
+        if color:
+            r,g,b = color[0],color[1],color[2]
+            if len(color) > 3:
+                alpha = color[3]
+                self.setBrush(QtGui.QColor(r,g,b,alpha))
+                return 1
+            self.setBrush(QtGui.QColor(r,g,b))
+            return 1
+        self.setBrush(QtGui.QColor(r,g,b,alpha))
+
+    def setPenColor(self,r=0,g=0,b=0,alpha=255,color=None):
+        if color:
+            r,g,b = color[0],color[1],color[2]
+            if len(color) > 3:
+                alpha = color[3]
+                self.setPen(QtGui.QColor(r,g,b,alpha))
+                return 1
+            self.setPen(QtGui.QColor(r,g,b))
+            return 1
+        self.setPen(QtGui.QColor(r,g,b,alpha))
+        return 0
+
+    def getChipBody(self):
+        return self.chipBody
+
+    def setPosition(self,x_or_tuple=None,y=None):
+        if type(x_or_tuple) == tuple:
+            self.chipBody.position=x_or_tuple
+        else:
+            self.chipBody.position=(x_or_tuple,y)
+        self.updateChipObject()
 
     def updateChipObject(self):
+        self.events()
         x,y=self.chipBody.position
+        self.chipBody.center_of_gravity=(self.cx,self.cy)
+        print('pos',self.chipBody.position)
+        print('Cs',self.cx,self.cy)
+        
+
         r=self.chipBody.angle/(2*3.14159265)*360
+        
+        trans=QtGui.QTransform()
+        trans.rotate(r)
+        self.setTransform(trans)
         self.setPos(x,y)
+        #self.translate(-self.cx,-self.cy)
+        #self.translate(self.cx*2,self.cy*2)
+
+    def events(self):
+        pass
+
+
+
+
+class ChipObjectCircle(QtGui.QGraphicsEllipseItem,pm.Circle,bp.blueprint):
+    def __init__(self,body_type=BODY_TYPE_DYNAMIC,mass=1,radius=10,offset=(0,0),inner_radius=0,density=None,friction=None,elasticity=None,color=None,scene=None,resource_ref_name=None):
+        QtGui.QGraphicsEllipseItem.__init__(self,-radius,-radius,radius*2,radius*2)
+        #QtGui.QGraphicsEllipseItem.__init__(self,0,0,radius*2,radius*2,scene=scene)
+        bp.blueprint.__init__(self,'ch_obj_cir')
+        self.__eventManager=bp.eventManager()
+        self.eventManager=self.getEventManager
+        
+
+        inertia = pm.moment_for_circle(mass,inner_radius,radius,offset)
+        self.chipBody = pm.Body(mass,inertia,body_type)
+        pm.Circle.__init__(self, self.chipBody, radius, offset)
+
+        if density:
+            self.density=density
+        if friction:
+            self.friction=friction
+        if elasticity:
+            self.elasticity=elasticity
+        if color:
+            self.setBrushColor(color=color)
+            self.setPenColor(color=color)
+
+        self.set_ref_name(resource_ref_name)
+        self.add_self_to_catalog()
+        self.updateChipObject()
+
+    def getEventManager(self):
+        return self.__eventManager
+
+    def setBrushColor(self,r=0,g=0,b=0,alpha=255,color=None):
+        if color:
+            r,g,b = color[0],color[1],color[2]
+            if len(color) > 3:
+                alpha = color[3]
+                self.setBrush(QtGui.QColor(r,g,b,alpha))
+                return 1
+            self.setBrush(QtGui.QColor(r,g,b))
+            return 1
+        self.setBrush(QtGui.QColor(r,g,b,alpha))
+
+    def setPenColor(self,r=0,g=0,b=0,alpha=255,color=None):
+        if color:
+            r,g,b = color[0],color[1],color[2]
+            if len(color) > 3:
+                alpha = color[3]
+                self.setPen(QtGui.QColor(r,g,b,alpha))
+                return 1
+            self.setPen(QtGui.QColor(r,g,b))
+            return 1
+        self.setPen(QtGui.QColor(r,g,b,alpha))
+        return 0
+
+    def getChipBody(self):
+        return self.chipBody
+
+    def setPosition(self,x_or_tuple=None,y=None):
+        if type(x_or_tuple) == tuple:
+            self.chipBody.position=x_or_tuple
+        else:
+            self.chipBody.position=(x_or_tuple,y)
+        self.updateChipObject()
+
+    def updateChipObject(self):
+        self.events()
+        x,y=self.chipBody.position
+        self.setPos(x,y)
+
+        '''
+        r=self.chipBody.angle/(2*3.14159265)*360
         self.translate(-self.radius,-self.radius)
         self.setRotation(r)
         self.translate(self.radius,self.radius)
+        '''
 
-
-
-
+    def events(self):
+        pass
 
 
 class ChipSpace(QtGui.QGraphicsScene,pm.Space,bp.blueprint):
-    def __init__(self, gravity=(500,0), fps=30, parent=None, threaded=False, resource_ref_name=None):
+    def __init__(self, gravity=(0,500), fps=30, parent=None, threaded=False, background_color=None, resource_ref_name=None,qApp=None):
         QtGui.QGraphicsScene.__init__(self, parent=parent)
         pm.Space.__init__(self,threaded=threaded)
         bp.blueprint.__init__(self,'ch_space')
+
+        self.__objs = []
+
+        self.__timerManager=timerManager()
+        self.timerManager=self.getTimerManager
+
+        self.__eventManager=bp.eventManager()
+        self.eventManager=self.getEventManager
+
         self.gravity = pm.Vec2d(gravity)
 
-        self.__evts={}
+        self.__app=qApp or app
+
         self.__bodies={}
 
         self.__fps=0
@@ -79,12 +220,54 @@ class ChipSpace(QtGui.QGraphicsScene,pm.Space,bp.blueprint):
         self.__running=False
         self.__timer=timer()
         self.__timer.reset(self.__running)
+
+        self.setBackgroundColor(color=background_color)
+
         self.set_ref_name(resource_ref_name)
         self.add_self_to_catalog()
 
+    def getEventManager(self):
+        return self.__eventManager or bp.eventManager()
+
+    def getTimerManager(self):
+        return self.__timerManager or timerManager()
+
+    def getTimer(self, timer=None):
+        return self.__timerManager.getTimer(timer)
+
+    def setTimer(self, timer=None, value=0, startTimer=False):
+        return self.__timerManager.setTimer(timer, value, startTimer)
+
+    def setQApp(self,QApp=None):
+        if isinstance(QApp,QtGui.QApplication):
+            self.__app = QApp
+            return 1
+        return 0
+
+    def getQApp(self):
+        return self.__app
+
+    def setBackgroundColor(self,r=0,g=0,b=0,alpha=255,color=None):
+        if color:
+            r,g,b = color[0],color[1],color[2]
+            if len(color) > 3:
+                alpha = color[3]
+                self.setBackgroundBrush(QtGui.QColor(r,g,b,alpha))
+                return 1
+            self.setBackgroundBrush(QtGui.QColor(r,g,b))
+            return 1
+        self.setBackgroundBrush(QtGui.QColor(r,g,b,alpha))
+        return 0
+
     def addChipObject(self,chip_object):
-        self.add(chip_object)
+        self.add(chip_object,chip_object.chipBody)
         self.addItem(chip_object)
+        self.__objs.append(chip_object)
+
+    def removeChipObject(self,chip_object):
+        self.remove(chip_object,chip_object.chipBody)
+        self.removeItem(chip_object)
+        return self.__objs.pop(self.__objs.index(chip_object))
 
     def getGravity(self):
         return self.gravity
@@ -103,30 +286,32 @@ class ChipSpace(QtGui.QGraphicsScene,pm.Space,bp.blueprint):
             self.gravity=(500,0)
 
     def getEvent(self,evt=None):
-        if evt:
-            return self.__evts[evt]
+        if evt in self.getEventManager().keys():
+            return self.getEventManager()[evt]
         return None
         
     def setEvent(self,evt=None,value=0):
-        self.__evts[evt] = value
-        return self.__evts[evt] 
+        self.getEventManager().setEvent(evt,value)
+        return self.getEventManager().getEvent(evt)
 
     def getEventDictionary(self,return_copy=True):
         if return_copy:
-            return self.__evts.copy()
-        return self.__evts
+            return self.getEventManager().getEventDictionary(return_copy)
+        return self.getEventManager()
         
     def isRunning(self):
         return self.__running
 
     def setRunning(self, running=None):
-        if running != [0,None,False]:
+        if running == [0,False]:
             self.__timer.pause()
             self.__running = False
             return 0
-        self.__timer.start()
-        self.__running = True
-        return 1
+        else:
+            self.__timer.start()
+            self.__running = True
+            return 1
+        return self.isRunning()
 
     def pause(self):
         self.__timer.pause()
@@ -182,14 +367,24 @@ class ChipSpace(QtGui.QGraphicsScene,pm.Space,bp.blueprint):
         while self.__running:
             self.events()
             self.__internal_run()
+
+        print('Run stopped!')
         return 0
 
     def __internal_run(self):
         self.tick()
-        app.processEvents()
+        self.step(self.getHZ())
+        for i in self.__objs:
+            i.updateChipObject()
+        self.__app.processEvents()
         time.sleep(self.getHZ())
 
     def events(self):
+        print('Running')
+        k=bp.getCatalog().find_resources_by_prefix('ch_obj',True)
+        for i in k:
+            j=bp.getCatalog().find_resource(i)
+            j.updateChipObject()
         pass
 
     def mouseReleaseEvent(self,evt=None):
@@ -200,26 +395,6 @@ class ChipSpace(QtGui.QGraphicsScene,pm.Space,bp.blueprint):
             self.setEvent('ESC',0)
             print("Escape pressed!")
 
-    '''
-    def run(self,evt=None):
-        h=600
-        self.running=True
-        while self.running:
-            #print('pos:',self.body.position)
-            x,y=self.body.position
-            if y > 10:
-                self.body.moment =pm.moment_for_circle(1,0,20)
-                self.body.velocity = (0,0)
-                y=-h
-                print('pos:',self.body.position)
-                print('moment',self.body.moment)
-                print('velocity',self.body.velocity)
-                self.body.position = x,y
-            self.cir.setPos(x,y)
-            self.space.step(.02)
-            app.processEvents()
-            time.sleep(.02)
-    '''
             
 class gameSpace(pm.Space):
     def __init__(self, threaded=False, parent=None):
