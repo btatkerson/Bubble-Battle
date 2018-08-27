@@ -70,6 +70,8 @@ class timerManager():
                 self.__timers[timer] = value
             elif type(value) in [float,int]:
                 self.__timers[timer] = t.timer(value)
+            else:
+                self.__timers[timer] = t.timer(0)
 
             self.__timers[timer].reset(startTimer)
             return self.__timers[timer] 

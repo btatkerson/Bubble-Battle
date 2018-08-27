@@ -120,6 +120,17 @@ def clean_res_ref(res_ref=None):
 class eventManager():
     def __init__(self):
         self.__evts={}
+        self.__evt_actions={}
+
+    def toggleEvent(self, evt=None):
+        if evt in self.__evts.keys():
+            if self.__evts[evt] in [False, 0]:
+                self.setEvent(evt,True)
+                return True
+            if self.__evts[evt] in [True, 1]:
+                self.setEvent(evt,False)
+                return False
+            return None
 
     def getEvent(self,evt=None):
         if evt in self.__evts.keys():
@@ -127,10 +138,30 @@ class eventManager():
         return None
         
     def setEvent(self,evt=None,value=0):
+        '''
+        Sets an event in the dictionary. If an event is toggled to True or 1, an
+        event action will be called if and when available.
+        '''
         if evt != None:
             self.__evts[evt] = value
+            if value in [1,True] and self.getEventAction(evt):
+                # Performs event action when event is toggled to True/1
+                self.getEventAction(evt)()
             return self.__evts[evt] 
         return None
+
+    def getEventAction(self, evt=None):
+        if evt in self.__evt_actions.keys():
+            return self.__evt_actions[evt]
+        return None
+
+    def setEventAction(self, evt=None, action=None):
+        if evt != None and callable(action):
+            if evt not in self.__evts.keys():
+                self.setEvent(evt)
+            self.__evt_actions[evt]=action
+        return None
+
 
     def getEventDictionary(self,return_copy=True):
         '''
@@ -283,6 +314,30 @@ class blueprint():
         return self.ref_name
 
     def get_res_ref(self):
+        '''
+        Returns the full resource reference name tag.
+
+        Resource Reference Name Tag:
+        <Prefix> + <Custom Tag> + <Reference Name> + <Suffix>
+
+        Prefix - Begins the tag of every instance of that object.
+                 A weapon item might start with "it_wep", signifying a weapon subset of in-game items
+        
+        Custom Tag - Puts "cust_" after the prefix. Used mostly to separate in-game resources from
+                     player made resources when option available.
+
+        Reference Name - A generic name for the resource. An item name, an area name, etc.
+
+        Suffix - Automatically set. If <Prefix> + <Custom Tag> + <Reference Name> already exists,
+                 a numerical tag is added starting with _0001 and moving upward in event of repeated
+                 creation of instances.
+                 
+                 If a numerical item is deleted from the catalog, the tag will be reused in the
+                 event of another duplicate being made. ie. it_generic_0001 through it_generic_0010 exists.
+                 it_generic_0004 is deleted from list. The next created instance of it_generic will be 
+                 it_generic_0004 and not it_generic_0011.
+        '''
+
         if self.custom:
             cust = 'cust_'
         else:
