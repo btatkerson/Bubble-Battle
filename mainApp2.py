@@ -6,7 +6,7 @@ import sys
 class mainWindow(QtGui.QWidget):
     def __init__(self, parent=None):
         QtGui.QWidget.__init__(self,parent=parent)
-        self.setFixedSize(1200,800)
+        self.setMinimumSize(1200,718)
         self.mainLayout = QtGui.QGridLayout(self)
         self.setLayout(self.mainLayout)
 

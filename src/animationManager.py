@@ -27,6 +27,9 @@ class animationManager(QtGui.QGraphicsPixmapItem):
         self.__updated_transformations = False
         self.__animations_null = True
 
+    def getCurrentAnimationCycleComplete(self):
+        return self.getCurrentAnimation().isCycleComplete()
+
     def getCurrentAnimation(self):
         return self.getAnimation(self.current_animation)
 
@@ -49,11 +52,12 @@ class animationManager(QtGui.QGraphicsPixmapItem):
         return None
 
 
-    def addAnimation(self, animation_tag=None, animation_object=None, offset=(0,0), scale=1, flip_horizontal=False, flip_vertical=False, adjusted_angle=0, fixed_angle=False, set_animation_to_default=False):
+    def addAnimation(self, animation_tag=None, animation_object=None, offset=(0,0), scale=1, flip_horizontal=False, flip_vertical=False, adjusted_angle=0, fixed_angle=False, termination_frames=[], static_animation=False, set_animation_to_default=False):
         '''
         Adds animation to class dictionary, also stores basic transformation in regards to animation transformations
         animation_tag = String - The tag used to reference the animation ie "idle", "walk_right"
         animation_object = Class animation - The animation class being stored
+        offset = Offset of pixmap relative to collision box
         scale = int, float or tuple - The scale for the animation 1 = 100%. If int/float given, width and height
                 will be scaled equally. If (int, int) or (float, float) is given, the scaling will be calculated
                 as (width, height).
@@ -61,6 +65,8 @@ class animationManager(QtGui.QGraphicsPixmapItem):
         flip_vertical = Boolean - Flips the QGraphicsPixmapItem vertically
         adjusted_angle = Float (Radians) - Performs a rotational transformation on the QGraphicsPixmapItem
         fixed_angle = Boolean - Locks the rotation of the QGraphicsPixmapItem
+        termination_frames = List - Int Frame numbers that are acceptable to cease current animation and go to the next one. 0 = First Frame, -1 = Last frame
+        static_animation = Boolean - Set this to prevent unnecessary frame calls
         '''
         if animation_tag and animation_object:
             if isinstance(animation_object,animation):
@@ -69,7 +75,9 @@ class animationManager(QtGui.QGraphicsPixmapItem):
                                                     'flip_horizontal':flip_horizontal,
                                                     'flip_vertical':flip_vertical,
                                                     'angle_adjustment':adjusted_angle,
-                                                    'fixed_angle':fixed_angle}
+                                                    'fixed_angle':fixed_angle,
+                                                    'termination_frames':termination_frames,
+                                                    'static_animation':static_animation}
 
                 self.animations[animation_tag]=animation_object
 
@@ -87,7 +95,17 @@ class animationManager(QtGui.QGraphicsPixmapItem):
             return self.animations.pop(animation_tag)
         return None
 
-    def setCurrentAnimation(self, animation_tag=None, sequence=None, sequence_after_cycle_complete=None):
+    def setCurrentAnimation(self, animation_tag=None, sequence=None, sequence_after_cycle_complete = None, override_termination_frame=False):
+        if self.current_animation != '' and not override_termination_frame:
+            if self.animation_flags[self.current_animation]['termination_frames'] != []:
+                found=0
+                for i in self.animation_flags[self.current_animation]['termination_frames']:
+                    if self.getCurrentAnimation().isOnFrameNumber(i):
+                        found = 1
+                        break
+                if not found:
+                    return False
+
         if animation_tag in self.current_animation:
             return True
         if animation_tag in self.animations.keys():
@@ -102,10 +120,25 @@ class animationManager(QtGui.QGraphicsPixmapItem):
             if self.animation_flags[animation_tag]['flip_vertical']:
                 self.scale_h*=-1
 
+            if self.animation_flags[animation_tag]['fixed_angle']:
+                self.rotation_lock=True
+            else:
+                self.rotation_lock=False
+
+            if self.animation_flags[animation_tag]['angle_adjustment']:
+                self.angle_adjustment=self.animation_flags[animation_tag]['angle_adjustment']
+            else:
+                self.angle_adjustment=0
+
             if self.animation_flags[animation_tag]['offset']:
                 self.offset_adjustment=self.animation_flags[animation_tag]['offset']
             else:
                 self.offset_adjustment=(0,0)
+
+            if self.animation_flags[animation_tag]['static_animation']:
+                self.static_animation=self.animation_flags[animation_tag]['static_animation']
+            else:
+                self.static_animation=False
 
             self.angle_adjustment=self.animation_flags[animation_tag]['angle_adjustment']
             self.__updated_transformations=True
@@ -213,18 +246,33 @@ class animationManager(QtGui.QGraphicsPixmapItem):
             return None
         if self.__updated_transformations:
             trans=QtGui.QTransform()
-            if self.rotation_lock:
-                trans.rotateRadians(self.angle_adjustment)
             '''
             else:
                 trans.rotateRadians(self.angle_adjustment+self.parent.chipBody.angle)
             '''
+            if self.angle_adjustment and not self.rotation_lock:
+                trans.translate(-self.offset_adjustment[0],-self.offset_adjustment[1])
+                trans.rotateRadians(self.angle_adjustment)
+                trans.translate(self.offset_adjustment[0],self.offset_adjustment[1])
             trans.scale(self.scale_w, self.scale_h)
             self.setTransform(trans)
             #self.setOffset(self.offset_adjustment)
             self.setPos(self.offset_adjustment[0],self.offset_adjustment[1])
 
             self.__updated_transformations = False
+
+
+        if self.rotation_lock:
+            trans=QtGui.QTransform()
+            if self.rotation_lock:
+                ang=self.parent.getChipBody().angle%(2*math.pi)
+            else:
+                ang=0
+            trans.translate(-self.offset_adjustment[0],-self.offset_adjustment[1])
+            trans.rotateRadians(-ang+self.angle_adjustment)
+            trans.translate(self.offset_adjustment[0],self.offset_adjustment[1])
+            trans.scale(self.scale_w, self.scale_h)
+            self.setTransform(trans)
             
         '''
         if self.rotation_lock:
@@ -232,18 +280,26 @@ class animationManager(QtGui.QGraphicsPixmapItem):
         else:
             #self.setRotation(self.parent.chipBody.angle/(2*3.14159265)*360)
             self.setRotation(self.parent.chipBody.angle)
+        if self.rotation_lock:
+            ang=self.parent.getChipBody().angle%(2*math.pi)
+            trans=QtGui.QTransform()
+            trans.rotateRadians(-selfotation()+self.angle_adjustment)
+            print('rotate',self.parent.getChipBody().angle%(2*math.pi))
+            self.setRotation(-self.rotation())
+            self.setTransform(trans)
         '''
 
-        if frame != None:
-            self.getCurrentAnimation().setCurrentFrameNumber(frame)
-            self.setPixmap(self.getCurrentAnimation().getCurrentFrame())
-            return 0
+        if not self.static_animation:
+            if frame != None:
+                self.getCurrentAnimation().setCurrentFrameNumber(frame)
+                self.setPixmap(self.getCurrentAnimation().getCurrentFrame())
+                return 0
 
-        if sequence != None:
-            self.getCurrentAnimation().setCurrentSequence(sequence)
+            if sequence != None:
+                self.getCurrentAnimation().setCurrentSequence(sequence)
 
-        if sequence_after_cycle_complete != None:
-            self.getCurrentAnimation().setSequenceOnCycleComplete(sequence_after_cycle_complete)
+            if sequence_after_cycle_complete != None:
+                self.getCurrentAnimation().setSequenceOnCycleComplete(sequence_after_cycle_complete)
 
 
         #self.setPos(self.parent.pos())
@@ -405,6 +461,15 @@ class animation():
 
     def getCurrentFrameNumber(self):
         return self.current_frame%len(self.getCurrentSequence())
+
+    def isOnFirstFrame(self):
+        return True if self.current_frame == 0 else False
+    
+    def isOnLastFrame(self):
+        return True if self.current_frame == len(self.getCurrentSequence())-1 else False
+
+    def isOnFrameNumber(self, frame_number=0):
+        return True if self.current_frame == frame_number%len(self.getCurrentSequence()) else False
 
     def getCurrentFrame(self):
         return self.frames[self.getCurrentSequence()[self.getCurrentFrameNumber()]]

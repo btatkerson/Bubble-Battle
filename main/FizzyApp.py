@@ -14,7 +14,7 @@ class FizzyView(QtGui.QGraphicsView):
         self.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
         self.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOff)
 
-    def mouseMoveEvent(self):
+    def mouseMoveEvent(self,evt=None):
         '''
         self.scene.events()
         self.scene.__internal_run()
@@ -33,6 +33,7 @@ class FizzyScene(ch.ChipSpace,ch.bp.blueprint):
                 'MOVE_LEFT' :0,
                 'IS_IDLE':1,
                 'GRAVITY': 0,
+                'ATTACK':0,
                 'TEST':0}
 
 
@@ -43,14 +44,16 @@ class FizzyScene(ch.ChipSpace,ch.bp.blueprint):
         '''
 
 
-        self.v_bod = ch.ChipObjectBox(ch.BODY_TYPE_DYNAMIC,180,150,40,color=[144,0,196,0],center_of_grav=(75,27.22),rotation_lock=False,scene=self,resource_ref_name='v_bod')
+        self.v_bod = ch.ChipObjectBox(ch.BODY_TYPE_DYNAMIC,180,150,40,color=[144,0,196,255],center_of_grav=(75,27.22),rotation_lock=False,scene=self,resource_ref_name='v_bod')
         self.v_bod.setPosition(240,-135)
         self.v_bod.elasticity=.05
         self.v_bod.friction=2
-        self.v_bod.animator.addAnimation('car_bod',ch.animation('./resources/images/car_bod2.png','.png'),(0,-40))
+        self.v_bod.animator.addAnimation('car_bod',ch.animation('./resources/images/car_bod2.png','.png'),(0,-40), static_animation=True)
         #self.v_bod.chipBody.center_of_gravity=(75,20)
         self.v_bod.animator.setCurrentAnimation('car_bod')
         self.addChipObject(self.v_bod)
+        #self.v_bod.toggleAnimatorVisibility()
+        self.v_bod.toggleCollisionBoxVisibility()
 
         self.v_bod_top = ch.ChipObjectPolygon(ch.BODY_TYPE_DYNAMIC,135,[(0,0),(150,0),(110,-40),(40,-40)],None,0,None,(0,-40),color=[144,0,196,0],scene=self,resource_ref_name='v_bod_top')
         self.v_bod_top.setPosition(240,-125)
@@ -70,19 +73,24 @@ class FizzyScene(ch.ChipSpace,ch.bp.blueprint):
 
         #self.ball=ch.chipObjectStarGenerator(ch.BODY_TYPE_DYNAMIC, 20, 20, 20, corner_radius=2, elasticity=0, color=[255,255,0], resource_ref_name='star')
         self.ball = ch.ChipObjectCircle(ch.BODY_TYPE_DYNAMIC,100,30,color=[255,255,0],scene=self,resource_ref_name='ball')
+        self.ball.animator.addAnimation('tire',ch.animation('./resources/images/tire_30.png','.png'),(-30,-30),static_animation=True)
         self.ball.getChipBody().position = (200,-65)
         self.ball.elasticity=.2
         self.ball.friction=10
         self.ball.setStartAngle(0)
         self.ball.setSpanAngle(270*16)
+        self.ball.toggleCollisionBoxVisibility()
         self.addChipObject(self.ball)
 
         self.ball2 = ch.ChipObjectCircle(ch.BODY_TYPE_DYNAMIC,100,30,color=[255,255,0],scene=self,resource_ref_name='ball')
+        self.ball2.animator.addAnimation('tire',ch.animation('./resources/images/tire_30.png','.png'),(-30,-30),fixed_angle=True,static_animation=True)
+        self.ball2.animator.setAngleAdjustment(ch.math.pi/8)
         self.ball2.getChipBody().position = (430,-65)
         self.ball2.elasticity=.2
         self.ball2.friction=10
         self.ball2.setStartAngle(0)
         self.ball2.setSpanAngle(270*16)
+        self.ball2.toggleCollisionBoxVisibility()
         self.addChipObject(self.ball2)
 
         ps = [ch.pm.PinJoint(self.v_bod.chipBody,self.ball.chipBody,(0,0),(0,0)),
@@ -98,7 +106,13 @@ class FizzyScene(ch.ChipSpace,ch.bp.blueprint):
         self.little_ball = ch.ChipObjectCircle(ch.BODY_TYPE_DYNAMIC,50,40,color=[0,196,0],scene=self,resource_ref_name='little_ball')
         self.little_ball.getChipBody().position =(400,-500)
         self.little_ball.elasticity=.99
+        #self.little_ball.animator.addAnimation('coin', ch.animation('./resources/images/spinning-coin-spritesheet.png','.png',1,14,[0,4],1/16),(-50,-50),.575,fixed_angle=0,adjusted_angle=19*ch.math.pi/32)
+        #self.little_ball.animator.addAnimation('coin', ch.animation('./resources/images/spinning-coin-spritesheet.png','.png',1,14,[0,12],1/16),(-50,-50),.575,fixed_angle=1,adjusted_angle=0)
+        self.little_ball.animator.addAnimation('sphere', ch.animation('./resources/images/sphere_test_alpha.png','.png'),(-40,-40),1,fixed_angle=1,adjusted_angle=0,static_animation=1)
         self.addChipObject(self.little_ball)
+        #self.little_ball.toggleCollisionBoxVisibility()
+        self.little_ball.animator.setOpacity(.5)
+        self.little_ball.setZValue(1000)
 
         self.ground = ch.ChipObjectBox(ch.BODY_TYPE_STATIC,1,600,30,color=[144,0,196],scene=self,resource_ref_name='ground')
         self.ground.setPosition(0,-15)
@@ -144,26 +158,62 @@ class FizzyScene(ch.ChipSpace,ch.bp.blueprint):
         self.addChipObject(self.seg)
         '''
 
-        self.seg_chain=ch.ChipObjectSegmentChainGenerator(ch.BODY_TYPE_DYNAMIC,[[600,-200],[1000,-200],[1000,-600],[600,-600]],1,1,16,2,2,0,[0,128,0],self)
+        self.seg_chain=ch.ChipObjectSegmentChainGenerator([[600,-200],[1000,-200],[1000,-900],[600,-900]],1,1,16,2,1,0,[0,128,0],self)
         #self.seg_chain=ch.ChipObjectSegmentChainGenerator([[700,-300],[1200,-400],[1300,-600],[900,-800],[400,-500]],0,1,8,2,2,0,[0,128,0],self)
         for i in self.seg_chain.getSegments():
             self.addChipObject(i)
 
+        t=[]
+        fx=lambda x: 40*ch.math.sin(ch.math.pi/80*x)
+        for i in range(600,1000,5):
+            t.append([i,fx(i)-500])
+
+        self.seg_chain2=ch.ChipObjectSegmentChainGenerator(t,0,1,2,1,1,0,[0,0,0],self)
+        for i in self.seg_chain2.getSegments():
+            self.addChipObject(i)
+
+        self.little_coin=ch.ChipObjectCircle(ch.BODY_TYPE_DYNAMIC,30,10,(0,0),0,None,0,.99,color=[255,0,0],scene=self)
+        self.little_coin.setPosition(770,-690)
+        self.little_coin.animator.addAnimation('coin',ch.animation('./resources/images/spinning-coin-spritesheet.png','.png',1,14,[0,12],1/24),(-13,-13),1/7,fixed_angle=1)
+        self.little_coin.toggleCollisionBoxVisibility()
+
+        self.addChipObject(self.little_coin)
+
+        self.little_coin2=ch.ChipObjectCircle(ch.BODY_TYPE_DYNAMIC,30,10,(0,0),0,None,0,.99,color=[255,0,0],scene=self)
+        self.little_coin2.setPosition(830,-670)
+        self.little_coin2.animator.addAnimation('coin',ch.animation('./resources/images/spinning-coin-spritesheet.png','.png',1,14,[0,12],1/24),(-13,-13),1/7,fixed_angle=1)
+        self.little_coin2.toggleCollisionBoxVisibility()
+
+        self.addChipObject(self.little_coin2)
+
+        self.little_coin3=ch.ChipObjectCircle(ch.BODY_TYPE_DYNAMIC,30,10,(0,0),0,None,0,.99,color=[255,0,0],scene=self)
+        self.little_coin3.setPosition(930,-770)
+        self.little_coin3.animator.addAnimation('coin',ch.animation('./resources/images/spinning-coin-spritesheet.png','.png',1,14,[0,12],1/24),(-13,-13),1/7,fixed_angle=1)
+        self.little_coin3.toggleCollisionBoxVisibility()
+
+        self.addChipObject(self.little_coin3)
+
+
+
         self.test_sprite=ch.ChipObjectBox(ch.BODY_TYPE_DYNAMIC,1,16*4,28*4,color=[255,0,0,255],scene=self,resource_ref_name='sprite')
         self.test_sprite.setPosition(800,-400)
-        self.test_sprite.animator.addAnimation('power_up_right',ch.animation('./resources/images/cat_sprite.png','.png',6,10,[10,15],1/12),(-14*4,-12*4),4)
+        self.test_sprite.animator.addAnimation('power_up_right',ch.animation('./resources/images/cat_sprite.png','.png',6,10,[10,15],1/12),(-14*4,-12*4),4,termination_frames=[-1])
         self.test_sprite.animator.getAnimation('power_up_right').addSequence('test',[0,1,2,3,4,5,4,5,4,5,4,5],1)
         self.test_sprite.animator.getAnimation('power_up_right').addSequence('blast',[4,5])
-        self.test_sprite.animator.addAnimation('power_up_left',ch.animation('./resources/images/cat_sprite.png','.png',6,10,[10,15],1/12),(120,-12*4),4,1)
+        self.test_sprite.animator.addAnimation('power_up_left',ch.animation('./resources/images/cat_sprite.png','.png',6,10,[10,15],1/12),(120,-12*4),4,1,termination_frames=[-1])
         self.test_sprite.animator.getAnimation('power_up_left').addSequence('test',[0,1,2,3,4,5,4,5,4,5,4,5],1)
         self.test_sprite.animator.getAnimation('power_up_left').addSequence('blast',[4,5])
 
-        self.test_sprite.animator.addAnimation('idle_right',ch.animation('./resources/images/cat_sprite.png','.png',6,10,None,1/12),(-14*4,-12*4),4)
+        self.test_sprite.animator.addAnimation('idle_right',ch.animation('./resources/images/cat_sprite.png','.png',6,10,None,1/12),(-14*4,-12*4),4,set_animation_to_default=1)
         self.test_sprite.animator.getAnimation('idle_right').addSequence('test',[0,20,0,21],1)
         self.test_sprite.animator.addAnimation('idle_left',ch.animation('./resources/images/cat_sprite.png','.png',6,10,None,1/12),(120,-12*4),4,1)
         self.test_sprite.animator.getAnimation('idle_left').addSequence('test',[0,20,0,21],1)
         self.test_sprite.toggleCollisionBoxVisibility(0,1)
         #self.test_sprite.chipBody.angle=ch.math.pi/2
+
+        self.test_sprite.animator.addAnimation('walk_right',ch.animation('./resources/images/cat_walk.png','.png',1,8,None,1/16),(-23*4,-4*2),4, termination_frames=[-1,4])
+
+        self.test_sprite.animator.addAnimation('walk_left',ch.animation('./resources/images/cat_walk.png','.png',1,8,None,1/16),(18+23*6,-4*2),4,1, termination_frames=[-1,4])
         '''
         self.test_sprite.setBrushColor(alpha=0)
         self.test_sprite.setPenColor(alpha=0)
@@ -216,8 +266,10 @@ class FizzyScene(ch.ChipSpace,ch.bp.blueprint):
         #self.obstacle3.getChipBody().angle = -3.141592654/4
         self.obstacle3.getChipBody().angle = -3.141592654/2
         self.obstacle3.getChipBody().angular_velocity=-2.5
-
+        self.obstacle3.animator.addAnimation('david',ch.animation('./resources/images/schwimmer.png','.png'),(-60,-52),static_animation=1)
         self.addChipObject(self.obstacle3)
+
+        #self.obstacle3.animator.setOpacity(.5)
 
         self.little_ball.setStartAngle(0)
         self.little_ball.setSpanAngle(16*325)
@@ -262,14 +314,17 @@ class FizzyScene(ch.ChipSpace,ch.bp.blueprint):
 
     def dropEvent(self, evt=None):
         pass
-
-
     '''
+
+
 
 
     def keyPressEvent(self, evt=None):
         if evt.key() == QtCore.Qt.Key_S:
             self.setEvent('SWITCH_ROTATION_SPEED',1)
+        if evt.key() == QtCore.Qt.Key_Space:
+            self.setEvent('ATTACK',1)
+            self.setEvent('FAST_SPIN',1)
         if evt.key() == QtCore.Qt.Key_Left:
             self.setEvent('MOVE_LEFT',1)
         if evt.key() == QtCore.Qt.Key_Right:
@@ -296,6 +351,9 @@ class FizzyScene(ch.ChipSpace,ch.bp.blueprint):
         if evt.key() == QtCore.Qt.Key_Right:
             self.setEvent('MOVE_RIGHT',0)
             self.setEvent('IS_IDLE',1)
+        if evt.key() == QtCore.Qt.Key_Space:
+            self.setEvent('ATTACK',0)
+            self.setEvent('FAST_SPIN',0)
         if evt.key() == QtCore.Qt.Key_Up:
             self.setEvent('JUMP',0)
         if evt.key() == QtCore.Qt.Key_Down:
@@ -319,7 +377,6 @@ class FizzyScene(ch.ChipSpace,ch.bp.blueprint):
 
             
             '''
-
             angle_to_point=self.v_bod.chipBody.getAngleToWorldPoint(self.obstacle3.chipBody.position,offset=(90,150))
             if angle_to_point < 0:
                 angle_to_point+=ch.math.pi*2
@@ -342,6 +399,13 @@ class FizzyScene(ch.ChipSpace,ch.bp.blueprint):
                     self.v_bod.chipBody.angular_velocity+=2
             '''
 
+        if self.getEvent('FAST_SPIN'):
+            v=self.obstacle3.chipBody.angular_velocity
+            self.obstacle3.chipBody.angular_velocity=abs(v)/v*10
+        else:
+            v=self.obstacle3.chipBody.angular_velocity
+            self.obstacle3.chipBody.angular_velocity=abs(v)/v*2.5
+
 
         if self.getEvent('JUMP'):
             self.v_bod.getChipBody().apply_impulse_at_local_point((4830,-4830),(10,20))
@@ -351,21 +415,44 @@ class FizzyScene(ch.ChipSpace,ch.bp.blueprint):
             an = self.v_bod.chipBody.angle
             self.v_bod.getChipBody().apply_impulse_at_local_point((0,6000),(75,20))
             #self.v_bod.getChipBody().apply_absolute_impulse_at_local_point((0,6000),(75,20))
-        if self.getEvent('MOVE_LEFT'):
-            self.__dir_face=0
-            self.setEvent('IS_IDLE',0)
-            self.ball.getChipBody().angular_velocity+=-2
-            self.ball2.getChipBody().angular_velocity+=-2
-            #self.test_sprite.animator.setCurrentAnimation('power_up_left','blast')
-            self.test_sprite.animator.setCurrentAnimation('power_up_left','default','blast')
+        if self.getEvent('MOVE_LEFT') and not self.getEvent('ATTACK'):
+            if not self.getEvent('MOVE_RIGHT'):
+                self.__dir_face=0
+                self.setEvent('IS_IDLE',0)
+                self.ball.getChipBody().angular_velocity+=-2
+                self.ball2.getChipBody().angular_velocity+=-2
+                if self.test_sprite.getChipBody().velocity[0]>-120:
+                    self.test_sprite.getChipBody().apply_absolute_impulse_at_local_point((-30,0),(32,56))
+                #self.test_sprite.animator.setCurrentAnimation('power_up_left','default','blast')
+                if not self.getEvent('ATTACK'):
+                    self.test_sprite.animator.setCurrentAnimation('walk_left',override_termination_frame = 1)
+            else:
+                self.setEvent('IS_IDLE',1)
             #self.test_sprite.animator.getCurrentAnimation().setSequenceOnCycleComplete('blast')
-        if self.getEvent('MOVE_RIGHT'):
-            self.__dir_face=1
-            self.setEvent('IS_IDLE',0)
-            self.ball.getChipBody().angular_velocity+=2
-            self.ball2.getChipBody().angular_velocity+=2
-            self.test_sprite.animator.setCurrentAnimation('power_up_right')
-            self.test_sprite.animator.getCurrentAnimation().setSequenceOnCycleComplete('blast')
+        if self.getEvent('MOVE_RIGHT') and not self.getEvent('ATTACK'):
+            if not self.getEvent('MOVE_LEFT'):
+                self.__dir_face=1
+                self.setEvent('IS_IDLE',0)
+                self.ball.getChipBody().angular_velocity+=2
+                self.ball2.getChipBody().angular_velocity+=2
+                if self.test_sprite.getChipBody().velocity[0]<120:
+                    self.test_sprite.getChipBody().apply_absolute_impulse_at_local_point((30,0),(32,56))
+                '''
+                self.test_sprite.animator.setCurrentAnimation('power_up_right')
+                self.test_sprite.animator.getCurrentAnimation().setSequenceOnCycleComplete('blast')
+                '''
+                if not self.getEvent('ATTACK'):
+                    self.test_sprite.animator.setCurrentAnimation('walk_right', override_termination_frame=1)
+            else:
+                self.setEvent('IS_IDLE',1)
+
+        if self.getEvent('ATTACK'):
+            self.setEvent('IS_IDLE',1)
+            if self.__dir_face:
+                self.test_sprite.animator.setCurrentAnimation('power_up_right', 'default', 'blast')
+            else:
+                self.test_sprite.animator.setCurrentAnimation('power_up_left', 'default', 'blast')
+
         if not self.getEvent('GRAVITY'):
             self.v_bod.getChipBody().apply_absolute_impulse_at_local_point((0,-900),(75,50))
         if self.getEvent('RESET_ANGLE'):
@@ -383,24 +470,34 @@ class FizzyScene(ch.ChipSpace,ch.bp.blueprint):
             self.setRunning(False)
             print("Is running:", self.setRunning(False))
             sys.exit(0)
+
         if self.getEvent('IS_IDLE'):
-            if self.__dir_face:
-                self.test_sprite.animator.setCurrentAnimation('idle_right')
+            v=self.test_sprite.getChipBody().velocity
+            if abs(v[0])>2:
+                self.test_sprite.getChipBody().velocity=(v[0]*.90,v[1])
             else:
-                self.test_sprite.animator.setCurrentAnimation('idle_left')
+                self.test_sprite.getChipBody().velocity=(0,v[1])
+            
+            #if not self.getEvent('ATTACK') and (self.test_sprite.animator.getCurrentAnimation().isOnLastFrame()):
+            if not self.getEvent('ATTACK'):
+                if self.__dir_face:
+                    self.test_sprite.animator.setCurrentAnimation('idle_right')
+                else:
+                    self.test_sprite.animator.setCurrentAnimation('idle_left')
 
         self.ball_grav()
 
-        print(self.eventManager().getEventDictionary())
+        #print(self.eventManager().getEventDictionary())
 
     def ball_grav(self):
         imp = ch.pm.Vec2d(0,-700)
         imp.rotate(self.little_ball.chipBody.getAngleToWorldPoint((380,-450)))
         imp.rotate(ch.math.pi/2)
         imp=imp+ch.pm.Vec2d(0,-200)
-        print(imp, self.little_ball.chipBody.getAngleToWorldPoint((380,-450)))
+        #print(imp, self.little_ball.chipBody.getAngleToWorldPoint((380,-450)))
         self.little_ball.chipBody.apply_absolute_impulse_at_local_point(imp,(0,0))
         self.little_ball.chipBody.angle = self.little_ball.chipBody.getAngleToWorldPoint((380,-450)) - ch.math.pi/8
+
 
         if self.getTimerManager().getTimerDelayPassed('DOT'):
             dot = QtGui.QGraphicsEllipseItem(QtCore.QRectF(0,0,5,5), scene = self)
@@ -413,7 +510,7 @@ class FizzyScene(ch.ChipSpace,ch.bp.blueprint):
             d=self.dots.pop(0)
             self.dots[10].setBrush(QtGui.QColor(255,255,255))
             self.dots[10].setPen(QtGui.QColor(255,255,255))
-            self.dots[25].setBrush(QtGui.QColor(0,0,2000))
+            self.dots[25].setBrush(QtGui.QColor(0,0,200))
             self.dots[25].setPen(QtGui.QColor(0,0,200))
             self.dots[35].setBrush(QtGui.QColor(0,200,0))
             self.dots[35].setPen(QtGui.QColor(0,200,0))
