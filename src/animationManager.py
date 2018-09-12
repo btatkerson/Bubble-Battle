@@ -5,13 +5,15 @@ from src.timer import timer
 from src.timerManager import timerManager
 import math
 import random
-import sys
-import time
 
 app = src.app.app
 
 class animationManager(QtGui.QGraphicsPixmapItem):
     def __init__(self, parent=None, scene=None):
+        self.ANIMATION_TYPE_STATIC = 'static'
+        self.ANIMATION_TYPE_SIMPLE = 'simple'
+        self.ANIMATION_TYPE_COMPLEX = 'complex'
+        
         QtGui.QGraphicsPixmapItem.__init__(self, parent=parent, scene=scene)
         self.animations={'default':None}
         self.animation_flags={'default':None}
@@ -52,7 +54,7 @@ class animationManager(QtGui.QGraphicsPixmapItem):
         return None
 
 
-    def addAnimation(self, animation_tag=None, animation_object=None, offset=(0,0), scale=1, flip_horizontal=False, flip_vertical=False, adjusted_angle=0, fixed_angle=False, termination_frames=[], static_animation=False, set_animation_to_default=False):
+    def addAnimation(self, animation_tag=None, animation_object=None, offset=(0,0), scale=1, flip_horizontal=False, flip_vertical=False, adjusted_angle=0, fixed_angle=False, termination_frames=[], static_animation=False, simple_animation=True, time_delay=None, random_frames=False, antialias=False, set_animation_to_default=False):
         '''
         Adds animation to class dictionary, also stores basic transformation in regards to animation transformations
         animation_tag = String - The tag used to reference the animation ie "idle", "walk_right"
@@ -66,7 +68,11 @@ class animationManager(QtGui.QGraphicsPixmapItem):
         adjusted_angle = Float (Radians) - Performs a rotational transformation on the QGraphicsPixmapItem
         fixed_angle = Boolean - Locks the rotation of the QGraphicsPixmapItem
         termination_frames = List - Int Frame numbers that are acceptable to cease current animation and go to the next one. 0 = First Frame, -1 = Last frame
-        static_animation = Boolean - Set this to prevent unnecessary frame calls
+        static_animation = Boolean - Set this to true if the animation is a single-frame picture to prevent resource demand
+        simple_animation = Boolean - Set this to true to 
+        random_frames = Boolean - Set to make animation play random frames of the animation (A twinkling star, for instance)
+        antialias = Boolean - Toggle the antialias on animation graphics
+        set_animation_to_default = Boolean - set if the new animation being added should be the new default in the manager
         '''
         if animation_tag and animation_object:
             if isinstance(animation_object,animation):
@@ -77,7 +83,9 @@ class animationManager(QtGui.QGraphicsPixmapItem):
                                                     'angle_adjustment':adjusted_angle,
                                                     'fixed_angle':fixed_angle,
                                                     'termination_frames':termination_frames,
-                                                    'static_animation':static_animation}
+                                                    'static_animation':static_animation,
+                                                    'random':random_frames,
+                                                    'antialias':antialias}
 
                 self.animations[animation_tag]=animation_object
 
@@ -140,7 +148,9 @@ class animationManager(QtGui.QGraphicsPixmapItem):
             else:
                 self.static_animation=False
 
+
             self.angle_adjustment=self.animation_flags[animation_tag]['angle_adjustment']
+            self.setAntialias(self.animation_flags[animation_tag]['antialias'])
             self.__updated_transformations=True
             
             self.current_animation=animation_tag 
@@ -162,6 +172,13 @@ class animationManager(QtGui.QGraphicsPixmapItem):
             return self.offset_adjustment
         return None
 
+    def setAntialias(self, antialias=None):
+        if antialias:
+            self.setTransformationMode(QtCore.Qt.SmoothTransformation)
+            return True
+        self.setTransformationMode(QtCore.Qt.FastTransformation)
+        return False
+            
     def flipHorizontal(self, direction=None):
         '''
         Flips the horizontal scale, mirroring the animation horizontally.
@@ -303,7 +320,10 @@ class animationManager(QtGui.QGraphicsPixmapItem):
 
 
         #self.setPos(self.parent.pos())
-        self.setPixmap(self.getCurrentAnimation().getNextFrame())
+        if self.animation_flags[self.current_animation]['random']:
+            self.setPixmap(self.getCurrentAnimation().getNextFrame(1))
+        else:
+            self.setPixmap(self.getCurrentAnimation().rotateFrame())
         return 0
 
 
@@ -316,6 +336,7 @@ class animation():
         rows, cols = divides the sprite sheet into given rows and columns (assuming equal size grids)
         frame_range = [start frame, end frame] - if rows and columns are given, this only collects the grid frames from left to right. Ex. 3 rows, 4 cols is 12 sprite blocks (0-11). [4,7] will return the four middle row blocks.
         time_delay = int, float - If given, a timer delay will have to pass before grabbing the next frame in the animation
+                                  1 = 1 second
         '''
         
         self.orig_pm=QtGui.QPixmap(source, file_format)
@@ -489,9 +510,17 @@ class animation():
             if reset_timer:
                 self.timeMng.resetTimer('frame_rate',1)
 
-    def getNextFrame(self):
+    def rotateFrame(self):
+        self.frames.append(self.frames.pop(0))
+        return self.frames[self.current_frame]
+
+    def getNextFrame(self, random_frame=False):
         if self.timeMng.isTimerDelayPassed('frame_rate',1):
-            self.current_frame=(self.current_frame+1)%len(self.getCurrentSequence())
+            if not random_frame:
+                self.current_frame=(self.current_frame+1)%len(self.getCurrentSequence())
+            else:
+                self.current_frame=random.randint(0,len(self.getCurrentSequence())-1)
+
             if self.current_frame == 0:
                 self.complete_cycle=1
 
@@ -501,7 +530,7 @@ class animation():
 
         return self.frames[self.getCurrentSequence()[self.current_frame]]
 
-    def getLastFrame(self):
+    def getLastFrame(self, random_frame=False):
         if self.timeMng.isTimerDelayPassed('frame_rate',1):
             if self.current_frame == 0:
                 self.complete_cycle=-1
@@ -510,7 +539,11 @@ class animation():
                     self.setCurrentSequence(self.getCurrentSequence())
                     self.__sequence_on_complete=None
 
-            self.current_frame=(self.current_frame-1)%len(self.getCurrentSequence())
+            if not random_frame:
+                self.current_frame=(self.current_frame-1)%len(self.getCurrentSequence())
+            else:
+                self.current_frame=random.randint(0,len(self.getCurrentSequence())-1)
+
         return self.frames[self.getCurrentSequence()[self.current_frame]]
         
     

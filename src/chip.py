@@ -4,13 +4,12 @@ import src.app
 
 from PyQt4 import QtCore, QtGui
 from src.timer import timer
-from src.animationManager import animation, animationManager
+from src.animationManager import animationManager, animation
 from src.timerManager import timerManager
+from src.textManager import textManager, textLine
 import math
 import pymunk as pm
 import src.blueprint as bp
-import random
-import sys
 import time
 
 BODY_TYPE_STATIC = pm.Body.STATIC
@@ -152,6 +151,8 @@ class ChipObjectSegment(QtGui.QGraphicsRectItem, pm.Segment, bp.blueprint):
         else:
             x1,y1,x2,y2=a_point_or_tuple[0],a_point_or_tuple[1],b_point[0],b_point[1]
 
+        self.__body_type=BODY_TYPE_STATIC
+
         self.line_angle_adjustment=math.atan2((y2-y1),(x2-x1))
         distance_between = int(((x2-x1)**2+(y2-y1)**2)**.5)
 
@@ -170,7 +171,7 @@ class ChipObjectSegment(QtGui.QGraphicsRectItem, pm.Segment, bp.blueprint):
         
 
         inertia = pm.moment_for_segment(mass,(x1,y1),(x2,y2),radius)
-        self.chipBody = ChipBody(mass,inertia,body_type)
+        self.chipBody = ChipBody(mass,inertia,self.__body_type)
         self.bod_segs=[x1,y1]
 
         pm.Segment.__init__(self, self.chipBody, (x1,y1), (x2,y2),radius=radius)
@@ -198,10 +199,13 @@ class ChipObjectSegment(QtGui.QGraphicsRectItem, pm.Segment, bp.blueprint):
         self.set_ref_name(resource_ref_name)
         self.add_self_to_catalog()
         self.__update_object=True
-        self.updateChipObject()
+        self.updateChipObject(1)
 
     def __center_of_grav(self):
         return self.cog
+
+    def getBodyType(self):
+        return self.__body_type
 
     def getEventManager(self):
         return self.__eventManager
@@ -247,7 +251,7 @@ class ChipObjectSegment(QtGui.QGraphicsRectItem, pm.Segment, bp.blueprint):
             self.chipBody.position=x_or_tuple
         else:
             self.chipBody.position=(x_or_tuple,y)
-        self.updateChipObject()
+        self.updateChipObject(1)
 
     def updateChipObject(self, force_update=False):
         self.events()
@@ -302,6 +306,7 @@ class ChipObjectSegmentChainGenerator():
 
 class ChipObjectPolygon(QtGui.QGraphicsPolygonItem,pm.Poly,bp.blueprint):
     def __init__(self,body_type=BODY_TYPE_DYNAMIC,mass=1,vertices=[],center_of_grav=None,radius=0, transform=None, offset=None, density=None,friction=None,elasticity=None,color=None,scene=None,resource_ref_name=None, prefix=None):
+        self.__body_type=body_type
         self.__verts = self.__generate_coords(vertices)
         QtGui.QGraphicsPolygonItem.__init__(self, self.__generate_coords(vertices,1), scene=scene)
         self.__color=[0,0,0,255]
@@ -347,9 +352,11 @@ class ChipObjectPolygon(QtGui.QGraphicsPolygonItem,pm.Poly,bp.blueprint):
         self.add_self_to_catalog()
         
         self.animator=animationManager(self,scene)
+        self.textManager=textManager(self.boundingRect().width(),None,None, self, scene)
         self.hide()
         self.animator.hide()
-        self.updateChipObject()
+        self.textManager.hide()
+        self.updateChipObject(1)
 
     def __center_of_grav(self):
         return self.cog
@@ -368,6 +375,9 @@ class ChipObjectPolygon(QtGui.QGraphicsPolygonItem,pm.Poly,bp.blueprint):
         #print(l)
         return l
 
+    def getBodyType(self):
+        return self.__body_type
+
     def getEventManager(self):
         return self.__eventManager
 
@@ -380,7 +390,7 @@ class ChipObjectPolygon(QtGui.QGraphicsPolygonItem,pm.Poly,bp.blueprint):
     def toggleEvent(self, evt=None):
         return self.__eventManager.toggleEvent(evt)
 
-    def toggleCollisionBoxVisibility(self, visible=None, wireframe=False):
+    def toggleCollisionBoxVisibility(self, visible=None, wireframe=False, wireframe_width=1):
         if len(self.__color)==3:
             self.__color.append(255) if self.__collison_box_visible else self.__color.append(0)
 
@@ -388,6 +398,11 @@ class ChipObjectPolygon(QtGui.QGraphicsPolygonItem,pm.Poly,bp.blueprint):
             self.__collison_box_visible = not self.__collison_box_visible
         elif visible in [True,False,0,1]:
             self.__collison_box_visible=visible
+
+        if type(visible)==float:
+            self.setOpacity(visible)
+        else:
+            self.setOpacity(1)
 
         if self.__collison_box_visible:
             self.__color[3]=255
@@ -397,11 +412,12 @@ class ChipObjectPolygon(QtGui.QGraphicsPolygonItem,pm.Poly,bp.blueprint):
                 self.__color[3]=0
                 self.setBrushColor(color=self.__color)
                 self.__color[3]=255
-            self.setPenColor(color=self.__color)
+            self.setPenColor(color=self.__color,radius=wireframe_width)
+            return True
         else:
             self.__color[3]=0
             self.setBrushColor(color=self.__color)
-            self.setPenColor(color=self.__color)
+            self.setPenColor(color=self.__color, radius=wireframe_width)
         return False
 
     def toggleAnimatorVisibility(self,visible=None):
@@ -410,11 +426,17 @@ class ChipObjectPolygon(QtGui.QGraphicsPolygonItem,pm.Poly,bp.blueprint):
         elif visible in [0,1,True,False]:
             self.__animator_visible = visible
 
+        if type(visible)==float:
+            self.animator.setOpacity(visible)
+        else:
+            self.animator.setOpacity(1)
+
         if self.__animator_visible:
             self.animator.show()
             return True
         self.animator.hide()
         return False
+
 
     def setBrushColor(self,r=0,g=0,b=0,alpha=255,color=None):
         if color:
@@ -427,16 +449,21 @@ class ChipObjectPolygon(QtGui.QGraphicsPolygonItem,pm.Poly,bp.blueprint):
             return 1
         self.setBrush(QtGui.QColor(r,g,b,alpha))
 
-    def setPenColor(self,r=0,g=0,b=0,alpha=255,color=None):
+    def setPenColor(self,r=0,g=0,b=0,alpha=255, radius=1, color=None):
+        pen=QtGui.QPen()
+        pen.setWidthF(radius)
         if color:
             r,g,b = color[0],color[1],color[2]
             if len(color) > 3:
                 alpha = color[3]
-                self.setPen(QtGui.QColor(r,g,b,alpha))
+                pen.setColor(QtGui.QColor(r,g,b,alpha))
+                self.setPen(pen)
                 return 1
-            self.setPen(QtGui.QColor(r,g,b))
+            pen.setColor(QtGui.QColor(r,g,b,alpha))
+            self.setPen(pen)
             return 1
-        self.setPen(QtGui.QColor(r,g,b,alpha))
+        pen.setColor(QtGui.QColor(r,g,b,alpha))
+        self.setPen(pen)
         return 0
 
     def getChipBody(self):
@@ -447,22 +474,25 @@ class ChipObjectPolygon(QtGui.QGraphicsPolygonItem,pm.Poly,bp.blueprint):
             self.chipBody.position=x_or_tuple
         else:
             self.chipBody.position=(x_or_tuple,y)
-        self.updateChipObject()
+        self.updateChipObject(1)
 
-    def updateChipObject(self):
+    def updateChipObject(self, force_update=False):
         self.events()
-        x,y=self.chipBody.position
-        self.chipBody.center_of_gravity=(self.cx,self.cy)
         
-        r=self.chipBody.angle/(2*3.14159265)*360
-        
-        trans=QtGui.QTransform()
-        trans.rotate(r)
-        self.setTransform(trans)
-        self.setPos(x,y)
-        #self.translate(-self.cx,-self.cy)
-        #self.translate(self.cx*2,self.cy*2)
+        if self.__body_type != BODY_TYPE_STATIC or force_update:
+            x,y=self.chipBody.position
+            self.chipBody.center_of_gravity=(self.cx,self.cy)
+            
+            r=self.chipBody.angle/(2*3.14159265)*360
+            
+            trans=QtGui.QTransform()
+            trans.rotate(r)
+            self.setTransform(trans)
+            self.setPos(x,y)
+            #self.translate(-self.cx,-self.cy)
+            #self.translate(self.cx*2,self.cy*2)
         self.animator.updateAnimation()
+        #self.textManager.updateText()
 
     def events(self):
         pass
@@ -522,6 +552,7 @@ class ChipObjectBox(QtGui.QGraphicsRectItem,pm.Poly,bp.blueprint):
         #self.graphic=QtGui.QGraphicsPixmapItem(QtGui.QPixmap('./resources/images/car_bod2.png','.png'),scene=scene)
         #self.graphic.setOffset(0,-40)
 
+        self.__body_type = body_type
         self.__rotation_lock = rotation_lock
         self.__rotation_min, self.__rotation_max = rotation
         self.__color=[0,0,0,255]
@@ -566,10 +597,11 @@ class ChipObjectBox(QtGui.QGraphicsRectItem,pm.Poly,bp.blueprint):
         self.add_self_to_catalog()
 
         self.animator=animationManager(self,scene)
-
+        self.textManager=textManager(self.boundingRect().width(),None,None, self, scene)
         self.hide()
         self.animator.hide()
-        self.updateChipObject()
+        self.textManager.hide()
+        self.updateChipObject(1)
 
     def __center_of_grav(self):
         return self.cog
@@ -579,6 +611,8 @@ class ChipObjectBox(QtGui.QGraphicsRectItem,pm.Poly,bp.blueprint):
         #return [[-width/2,-height/2],[width/2,-height/2],[width/2,height/2],[-width/2,height/2]]
         return [[0,0],[width,0],[width,height],[0,height]]
 
+    def getBodyType(self):
+        return self.__body_type
 
     def getEventManager(self):
         return self.__eventManager
@@ -592,7 +626,7 @@ class ChipObjectBox(QtGui.QGraphicsRectItem,pm.Poly,bp.blueprint):
     def toggleEvent(self, evt=None):
         return self.__eventManager.toggleEvent(evt)
 
-    def toggleCollisionBoxVisibility(self, visible=None, wireframe=False):
+    def toggleCollisionBoxVisibility(self, visible=None, wireframe=False, wireframe_width=1):
         if len(self.__color)==3:
             self.__color.append(255) if self.__collison_box_visible else self.__color.append(0)
 
@@ -600,6 +634,11 @@ class ChipObjectBox(QtGui.QGraphicsRectItem,pm.Poly,bp.blueprint):
             self.__collison_box_visible = not self.__collison_box_visible
         elif visible in [True,False,0,1]:
             self.__collison_box_visible=visible
+
+        if type(visible)==float:
+            self.setOpacity(visible)
+        else:
+            self.setOpacity(1)
 
         if self.__collison_box_visible:
             self.__color[3]=255
@@ -609,11 +648,12 @@ class ChipObjectBox(QtGui.QGraphicsRectItem,pm.Poly,bp.blueprint):
                 self.__color[3]=0
                 self.setBrushColor(color=self.__color)
                 self.__color[3]=255
-            self.setPenColor(color=self.__color)
+            self.setPenColor(color=self.__color,radius=wireframe_width)
+            return True
         else:
             self.__color[3]=0
             self.setBrushColor(color=self.__color)
-            self.setPenColor(color=self.__color)
+            self.setPenColor(color=self.__color, radius=wireframe_width)
         return False
 
     def toggleAnimatorVisibility(self,visible=None):
@@ -621,6 +661,11 @@ class ChipObjectBox(QtGui.QGraphicsRectItem,pm.Poly,bp.blueprint):
             self.__animator_visible = not self.__animator_visible
         elif visible in [0,1,True,False]:
             self.__animator_visible = visible
+
+        if type(visible)==float:
+            self.animator.setOpacity(visible)
+        else:
+            self.animator.setOpacity(1)
 
         if self.__animator_visible:
             self.animator.show()
@@ -640,16 +685,21 @@ class ChipObjectBox(QtGui.QGraphicsRectItem,pm.Poly,bp.blueprint):
             return 1
         self.setBrush(QtGui.QColor(r,g,b,alpha))
 
-    def setPenColor(self,r=0,g=0,b=0,alpha=255,color=None):
+    def setPenColor(self,r=0,g=0,b=0,alpha=255, radius=1, color=None):
+        pen=QtGui.QPen()
+        pen.setWidthF(radius)
         if color:
             r,g,b = color[0],color[1],color[2]
             if len(color) > 3:
                 alpha = color[3]
-                self.setPen(QtGui.QColor(r,g,b,alpha))
+                pen.setColor(QtGui.QColor(r,g,b,alpha))
+                self.setPen(pen)
                 return 1
-            self.setPen(QtGui.QColor(r,g,b))
+            pen.setColor(QtGui.QColor(r,g,b,alpha))
+            self.setPen(pen)
             return 1
-        self.setPen(QtGui.QColor(r,g,b,alpha))
+        pen.setColor(QtGui.QColor(r,g,b,alpha))
+        self.setPen(pen)
         return 0
 
     def getChipBody(self):
@@ -660,28 +710,31 @@ class ChipObjectBox(QtGui.QGraphicsRectItem,pm.Poly,bp.blueprint):
             self.chipBody.position=x_or_tuple
         else:
             self.chipBody.position=(x_or_tuple,y)
-        self.updateChipObject()
+        self.updateChipObject(1)
 
-    def updateChipObject(self):
+    def updateChipObject(self, force_update=False):
         self.events()
-        x,y=self.chipBody.position
-        self.chipBody.center_of_gravity=(self.cx,self.cy)
 
-        if not self.__rotation_lock:
-            r=self.chipBody.angle/(2*3.14159265)*360
-            trans=QtGui.QTransform()
-            trans.rotate(r)
-            self.setTransform(trans)
-        else:
-            if self.chipBody.angle <= self.__rotation_min:
-                self.chipBody.angle = self.__rotation_min
-            elif self.chipBody.angle >= self.__rotation_max:
-                self.chipBody.angle = self.__rotation_max
-                
+        if self.__body_type != BODY_TYPE_STATIC or force_update:
+            x,y=self.chipBody.position
+            self.chipBody.center_of_gravity=(self.cx,self.cy)
 
-        self.setPos(x,y)
+            if not self.__rotation_lock:
+                r=self.chipBody.angle/(2*3.14159265)*360
+                trans=QtGui.QTransform()
+                trans.rotate(r)
+                self.setTransform(trans)
+            else:
+                if self.chipBody.angle <= self.__rotation_min:
+                    self.chipBody.angle = self.__rotation_min
+                elif self.chipBody.angle >= self.__rotation_max:
+                    self.chipBody.angle = self.__rotation_max
+                    
+
+            self.setPos(x,y)
 
         self.animator.updateAnimation()
+        #self.textManager.updateText()
 
     def events(self):
         pass
@@ -696,7 +749,7 @@ class ChipObjectCircle(QtGui.QGraphicsEllipseItem,pm.Circle,bp.blueprint):
         bp.blueprint.__init__(self, prefix or 'ch_obj_cir')
         self.__eventManager=bp.eventManager()
         self.eventManager=self.getEventManager
-                
+        self.__body_type = body_type       
         self.__color=[0,0,0,255]
         self.__collison_box_visible=True
         self.__animator_visible=True
@@ -722,7 +775,7 @@ class ChipObjectCircle(QtGui.QGraphicsEllipseItem,pm.Circle,bp.blueprint):
 
         self.hide()
         self.animator.hide()
-        self.updateChipObject()
+        self.updateChipObject(1)
 
     def getEventManager(self):
         return self.__eventManager
@@ -736,7 +789,10 @@ class ChipObjectCircle(QtGui.QGraphicsEllipseItem,pm.Circle,bp.blueprint):
     def toggleEvent(self, evt=None):
         return self.__eventManager.toggleEvent(evt)
 
-    def toggleCollisionBoxVisibility(self, visible=None, wireframe=False):
+    def getBodyType(self):
+        return self.__body_type
+
+    def toggleCollisionBoxVisibility(self, visible=None, wireframe=False, wireframe_width=1):
         if len(self.__color)==3:
             self.__color.append(255) if self.__collison_box_visible else self.__color.append(0)
 
@@ -744,6 +800,11 @@ class ChipObjectCircle(QtGui.QGraphicsEllipseItem,pm.Circle,bp.blueprint):
             self.__collison_box_visible = not self.__collison_box_visible
         elif visible in [True,False,0,1]:
             self.__collison_box_visible=visible
+
+        if type(visible)==float:
+            self.setOpacity(visible)
+        else:
+            self.setOpacity(1)
 
         if self.__collison_box_visible:
             self.__color[3]=255
@@ -753,11 +814,12 @@ class ChipObjectCircle(QtGui.QGraphicsEllipseItem,pm.Circle,bp.blueprint):
                 self.__color[3]=0
                 self.setBrushColor(color=self.__color)
                 self.__color[3]=255
-            self.setPenColor(color=self.__color)
+            self.setPenColor(color=self.__color,radius=wireframe_width)
+            return True
         else:
             self.__color[3]=0
             self.setBrushColor(color=self.__color)
-            self.setPenColor(color=self.__color)
+            self.setPenColor(color=self.__color, radius=wireframe_width)
         return False
 
     def toggleAnimatorVisibility(self,visible=None):
@@ -766,11 +828,17 @@ class ChipObjectCircle(QtGui.QGraphicsEllipseItem,pm.Circle,bp.blueprint):
         elif visible in [0,1,True,False]:
             self.__animator_visible = visible
 
+        if type(visible)==float:
+            self.animator.setOpacity(visible)
+        else:
+            self.animator.setOpacity(1)
+
         if self.__animator_visible:
             self.animator.show()
             return True
         self.animator.hide()
         return False
+
 
     def setBrushColor(self,r=0,g=0,b=0,alpha=255,color=None):
         if color:
@@ -783,17 +851,23 @@ class ChipObjectCircle(QtGui.QGraphicsEllipseItem,pm.Circle,bp.blueprint):
             return 1
         self.setBrush(QtGui.QColor(r,g,b,alpha))
 
-    def setPenColor(self,r=0,g=0,b=0,alpha=255,color=None):
+    def setPenColor(self,r=0,g=0,b=0,alpha=255, radius=1, color=None):
+        pen=QtGui.QPen()
+        pen.setWidthF(radius)
         if color:
             r,g,b = color[0],color[1],color[2]
             if len(color) > 3:
                 alpha = color[3]
-                self.setPen(QtGui.QColor(r,g,b,alpha))
+                pen.setColor(QtGui.QColor(r,g,b,alpha))
+                self.setPen(pen)
                 return 1
-            self.setPen(QtGui.QColor(r,g,b))
+            pen.setColor(QtGui.QColor(r,g,b,alpha))
+            self.setPen(pen)
             return 1
-        self.setPen(QtGui.QColor(r,g,b,alpha))
+        pen.setColor(QtGui.QColor(r,g,b,alpha))
+        self.setPen(pen)
         return 0
+
 
     def getChipBody(self):
         return self.chipBody
@@ -803,17 +877,18 @@ class ChipObjectCircle(QtGui.QGraphicsEllipseItem,pm.Circle,bp.blueprint):
             self.chipBody.position=x_or_tuple
         else:
             self.chipBody.position=(x_or_tuple,y)
-        self.updateChipObject()
+        self.updateChipObject(1)
 
-    def updateChipObject(self):
+    def updateChipObject(self, force_update=False):
         self.events()
-        x,y=self.chipBody.position
-        self.setPos(x,y)
+        if self.__body_type != BODY_TYPE_STATIC or force_update:
+            x,y=self.chipBody.position
+            self.setPos(x,y)
 
-        r=self.chipBody.angle/(2*3.14159265)*360
-        self.translate(-self.radius,-self.radius)
-        self.setRotation(r)
-        self.translate(self.radius,self.radius)
+            r=self.chipBody.angle/(2*3.14159265)*360
+            self.translate(-self.radius,-self.radius)
+            self.setRotation(r)
+            self.translate(self.radius,self.radius)
 
         self.animator.updateAnimation()
 
@@ -822,12 +897,13 @@ class ChipObjectCircle(QtGui.QGraphicsEllipseItem,pm.Circle,bp.blueprint):
 
 
 class ChipSpace(QtGui.QGraphicsScene,pm.Space,bp.blueprint):
-    def __init__(self, gravity=(0,500), fps=30, parent=None, threaded=False, background_color=None, resource_ref_name=None,qApp=None):
+    def __init__(self, gravity=(0,500), fps=30, parent=None, threaded=False, background_color=None, resource_ref_name=None,qApp=None, statusBar=None):
         QtGui.QGraphicsScene.__init__(self, parent=parent)
         pm.Space.__init__(self,threaded=threaded)
         bp.blueprint.__init__(self,'ch_space')
 
-        self.__objs = []
+        self.__objs_all = []
+        self.__objs_priority = []
 
         self.__timerManager=timerManager()
         self.timerManager=self.getTimerManager
@@ -848,6 +924,10 @@ class ChipSpace(QtGui.QGraphicsScene,pm.Space,bp.blueprint):
         self.__running=False
         self.__timer=timer()
         self.__timer.reset(self.__running)
+
+        self.__statusBar = None
+        if isinstance(statusBar,QtGui.QStatusBar):
+            self.__statusBar = statusBar
 
         self.setBackgroundColor(color=background_color)
 
@@ -875,8 +955,6 @@ class ChipSpace(QtGui.QGraphicsScene,pm.Space,bp.blueprint):
     def setTimer(self, timer=None, value=0, startTimer=False):
         return self.__timerManager.setTimer(timer, value, startTimer)
 
-        
-
     def setQApp(self,QApp=None):
         if isinstance(QApp,QtGui.QApplication):
             self.__app = QApp
@@ -886,6 +964,21 @@ class ChipSpace(QtGui.QGraphicsScene,pm.Space,bp.blueprint):
     def getQApp(self):
         return self.__app
 
+    def displayStatus(self, status=None, msecs=0):
+        if not self.__statusBar:
+            return 0 
+
+        if isinstance(status, (str,int,float)):
+                self.__statusBar.showMessage(str(status),msecs)
+
+    def hideStatusBar(self):
+        if self.__statusBar:
+            self.__statusBar.hide()
+
+    def showStatusBar(self):
+        if self.__statusBar:
+            self.__statusBar.show()
+        
     def setBackgroundColor(self,r=0,g=0,b=0,alpha=255,color=None):
         if color:
             r,g,b = color[0],color[1],color[2]
@@ -908,12 +1001,29 @@ class ChipSpace(QtGui.QGraphicsScene,pm.Space,bp.blueprint):
         except:
             pass
 
-        self.__objs.append(chip_object)
+        try:
+            self.addItem(chip_object.textManager)
+            chip_object.textManager.show()
+        except:
+            pass
+
+        chip_object.updateChipObject(1)
+
+        self.__objs_all.append(chip_object)
+        if not isinstance(chip_object,ChipObjectSegment) and not chip_object.getBodyType()==BODY_TYPE_STATIC:
+            self.__objs_priority.append(chip_object)
+
+            
 
     def removeChipObject(self,chip_object):
         self.remove(chip_object,chip_object.chipBody)
         self.removeItem(chip_object)
-        return self.__objs.pop(self.__objs.index(chip_object))
+        try:
+            self.__objs_priority.pop(self.__objs_priority.index(chip_object))
+        except ValueError:
+            pass
+        return self.__objs_all.pop(self.__objs_all.index(chip_object))
+
 
     def getGravity(self):
         return self.gravity
@@ -1028,7 +1138,8 @@ class ChipSpace(QtGui.QGraphicsScene,pm.Space,bp.blueprint):
     def __internal_run(self):
         self.tick()
         self.step(self.getHZ())
-        for i in self.__objs:
+        #self.step(1/self.getFPSActual())
+        for i in self.__objs_priority:
             i.updateChipObject()
         self.__app.processEvents()
         time.sleep(self.getHZ())
@@ -1053,7 +1164,7 @@ class ChipSpace(QtGui.QGraphicsScene,pm.Space,bp.blueprint):
 
             
 class gameSpace(pm.Space):
-    def __init__(self, threaded=False, parent=None):
+    def __init__(self, threaded=False, statusBar=None, parent=None):
         pm.Space.__init__(self,threaded=threaded)
         self.gravity = pm.Vec2d(0,900.0)
         mass = 1

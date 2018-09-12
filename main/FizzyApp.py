@@ -1,6 +1,7 @@
 from PyQt4 import QtCore, QtGui
 import src.chip as ch
 import sys
+import random
 
 app = ch.app
 
@@ -22,9 +23,9 @@ class FizzyView(QtGui.QGraphicsView):
         pass
 
 class FizzyScene(ch.ChipSpace,ch.bp.blueprint):
-    def __init__(self, parent=None, threaded=False, color=[0,255,255], res_name='main_game'):
+    def __init__(self, parent=None, threaded=False, color=[0,255,255], res_name='main_game', statusBar=None):
 
-        ch.ChipSpace.__init__(self, (0,200), 50, parent, threaded, color, res_name)
+        ch.ChipSpace.__init__(self, (0,200), 60, parent, threaded, color, res_name, statusBar=statusBar)
         #ch.ChipSpace.__init__(self, (0,0), 50, parent, threaded, color, res_name)
         ch.bp.blueprint.__init__(self,'fizz_scene')
         self.set_ref_name(res_name)
@@ -48,14 +49,21 @@ class FizzyScene(ch.ChipSpace,ch.bp.blueprint):
         self.v_bod.setPosition(240,-135)
         self.v_bod.elasticity=.05
         self.v_bod.friction=2
-        self.v_bod.animator.addAnimation('car_bod',ch.animation('./resources/images/car_bod2.png','.png'),(0,-40), static_animation=True)
+        self.v_bod.animator.addAnimation('car_bod',ch.animation('./resources/images/car_bod2.png','.png'),(0,-40), static_animation=True, antialias=1)
         #self.v_bod.chipBody.center_of_gravity=(75,20)
         self.v_bod.animator.setCurrentAnimation('car_bod')
         self.addChipObject(self.v_bod)
-        #self.v_bod.toggleAnimatorVisibility()
+        self.v_bod.toggleAnimatorVisibility(1)
         self.v_bod.toggleCollisionBoxVisibility()
 
-        self.v_bod_top = ch.ChipObjectPolygon(ch.BODY_TYPE_DYNAMIC,135,[(0,0),(150,0),(110,-40),(40,-40)],None,0,None,(0,-40),color=[144,0,196,0],scene=self,resource_ref_name='v_bod_top')
+        '''
+        self.v_bod.textManager.setLine(0,'[carname]', color='#660088',size=20,align='CENTER', bold=1, face='Impact')
+        self.v_bod.textManager.setOffsetPosition((0,-40))
+        self.v_bod.textManager.setVar('carname','Sauce Boy')
+        self.v_bod.textManager.updateText(1)
+        '''
+
+        self.v_bod_top = ch.ChipObjectPolygon(ch.BODY_TYPE_DYNAMIC,135,[(0,0),(150,0),(110,-40),(40,-40)],(75,67.22),0,None,(0,-40),color=[144,0,196,0],scene=self,resource_ref_name='v_bod_top')
         self.v_bod_top.setPosition(240,-125)
         self.v_bod_top.elasticity=.05
         self.v_bod_top.friction=2
@@ -73,7 +81,7 @@ class FizzyScene(ch.ChipSpace,ch.bp.blueprint):
 
         #self.ball=ch.chipObjectStarGenerator(ch.BODY_TYPE_DYNAMIC, 20, 20, 20, corner_radius=2, elasticity=0, color=[255,255,0], resource_ref_name='star')
         self.ball = ch.ChipObjectCircle(ch.BODY_TYPE_DYNAMIC,100,30,color=[255,255,0],scene=self,resource_ref_name='ball')
-        self.ball.animator.addAnimation('tire',ch.animation('./resources/images/tire_30.png','.png'),(-30,-30),static_animation=True)
+        self.ball.animator.addAnimation('tire',ch.animation('./resources/images/tire_30.png','.png'),(-30,-30),static_animation=True, antialias=1)
         self.ball.getChipBody().position = (200,-65)
         self.ball.elasticity=.2
         self.ball.friction=10
@@ -83,7 +91,7 @@ class FizzyScene(ch.ChipSpace,ch.bp.blueprint):
         self.addChipObject(self.ball)
 
         self.ball2 = ch.ChipObjectCircle(ch.BODY_TYPE_DYNAMIC,100,30,color=[255,255,0],scene=self,resource_ref_name='ball')
-        self.ball2.animator.addAnimation('tire',ch.animation('./resources/images/tire_30.png','.png'),(-30,-30),fixed_angle=True,static_animation=True)
+        self.ball2.animator.addAnimation('tire',ch.animation('./resources/images/tire_30.png','.png'),(-30,-30),fixed_angle=False,static_animation=True, antialias=1)
         self.ball2.animator.setAngleAdjustment(ch.math.pi/8)
         self.ball2.getChipBody().position = (430,-65)
         self.ball2.elasticity=.2
@@ -98,12 +106,13 @@ class FizzyScene(ch.ChipSpace,ch.bp.blueprint):
               ch.pm.PinJoint(self.v_bod.chipBody,self.ball2.chipBody,(150,0),(0,0)),
               ch.pm.PinJoint(self.v_bod.chipBody,self.ball2.chipBody,(150,40),(0,0)),
               #ch.pm.DampedSpring(self.ball.chipBody,self.ball2.chipBody,(0,0),(0,0),230,100,50)]
-              ch.pm.PinJoint(self.ball.chipBody,self.ball2.chipBody,(0,0),(0,0))]
+              ch.pm.PinJoint(self.ball.chipBody,self.ball2.chipBody,(0,0),(0,0)),
+              ch.pm.GearJoint(self.ball.chipBody,self.ball2.chipBody,0,1)]
               
         for i in ps:
             self.add(i)
 
-        self.little_ball = ch.ChipObjectCircle(ch.BODY_TYPE_DYNAMIC,50,40,color=[0,196,0],scene=self,resource_ref_name='little_ball')
+        self.little_ball = ch.ChipObjectCircle(ch.BODY_TYPE_DYNAMIC,80,40,color=[0,196,0],scene=self,resource_ref_name='little_ball')
         self.little_ball.getChipBody().position =(400,-500)
         self.little_ball.elasticity=.99
         #self.little_ball.animator.addAnimation('coin', ch.animation('./resources/images/spinning-coin-spritesheet.png','.png',1,14,[0,4],1/16),(-50,-50),.575,fixed_angle=0,adjusted_angle=19*ch.math.pi/32)
@@ -150,6 +159,7 @@ class FizzyScene(ch.ChipSpace,ch.bp.blueprint):
         self.ramp4.getChipBody().angle = -3*3.141592654/4
         self.ramp4.elasticity=.1
         self.ramp4.friction=2
+        self.ramp4.updateChipObject(1)
         #self.addChipObject(self.ramp4)
 
         '''
@@ -164,11 +174,14 @@ class FizzyScene(ch.ChipSpace,ch.bp.blueprint):
             self.addChipObject(i)
 
         t=[]
-        fx=lambda x: 40*ch.math.sin(ch.math.pi/80*x)
-        for i in range(600,1000,5):
-            t.append([i,fx(i)-500])
+        fx=lambda x: 30*ch.math.sin(ch.math.pi/80*x)+20*ch.math.cos(ch.math.pi/180*x+ch.math.pi/12)
+        #fx=lambda x: -40*((x-800)/200)**2
+        #for i in range(100,1400,5):
+        for i in range(100,1400,20):
+            t.append([i,fx(i)-400])
 
-        self.seg_chain2=ch.ChipObjectSegmentChainGenerator(t,0,1,2,1,1,0,[0,0,0],self)
+        self.seg_chain2=ch.ChipObjectSegmentChainGenerator(t,0,0,2,1,1,0,[0,0,0],self)
+        #self.seg_chain2=ch.ChipObjectSegmentChainGenerator(t,0,1,2,1,1,0,[0,0,0],self)
         for i in self.seg_chain2.getSegments():
             self.addChipObject(i)
 
@@ -190,9 +203,19 @@ class FizzyScene(ch.ChipSpace,ch.bp.blueprint):
         self.little_coin3.setPosition(930,-770)
         self.little_coin3.animator.addAnimation('coin',ch.animation('./resources/images/spinning-coin-spritesheet.png','.png',1,14,[0,12],1/24),(-13,-13),1/7,fixed_angle=1)
         self.little_coin3.toggleCollisionBoxVisibility()
-
         self.addChipObject(self.little_coin3)
 
+        self.coins=[]
+        for i in range(30):
+            coin=ch.ChipObjectCircle(ch.BODY_TYPE_DYNAMIC,90,10,(0,0),0,None,0,.95,color=[255,0,0],scene=self)
+            coin.setPosition(random.randrange(100,1300,20),-random.randrange(600,1000,20))
+            coin.animator.addAnimation('coin',ch.animation('./resources/images/spinning-coin-spritesheet.png','.png',1,14,[0,12],1/24),(-13,-13),1/7,fixed_angle=1)
+            self.coins.append(coin)
+            coin.toggleCollisionBoxVisibility()
+
+        for i in self.coins:
+            self.addChipObject(i)
+            #i.toggleAnimatorVisibility()
 
 
         self.test_sprite=ch.ChipObjectBox(ch.BODY_TYPE_DYNAMIC,1,16*4,28*4,color=[255,0,0,255],scene=self,resource_ref_name='sprite')
@@ -208,7 +231,9 @@ class FizzyScene(ch.ChipSpace,ch.bp.blueprint):
         self.test_sprite.animator.getAnimation('idle_right').addSequence('test',[0,20,0,21],1)
         self.test_sprite.animator.addAnimation('idle_left',ch.animation('./resources/images/cat_sprite.png','.png',6,10,None,1/12),(120,-12*4),4,1)
         self.test_sprite.animator.getAnimation('idle_left').addSequence('test',[0,20,0,21],1)
-        self.test_sprite.toggleCollisionBoxVisibility(0,1)
+        self.test_sprite.toggleCollisionBoxVisibility(0,0,2)
+        #self.test_sprite.toggleAnimatorVisibility(1)
+
         #self.test_sprite.chipBody.angle=ch.math.pi/2
 
         self.test_sprite.animator.addAnimation('walk_right',ch.animation('./resources/images/cat_walk.png','.png',1,8,None,1/16),(-23*4,-4*2),4, termination_frames=[-1,4])
@@ -219,6 +244,11 @@ class FizzyScene(ch.ChipSpace,ch.bp.blueprint):
         self.test_sprite.setPenColor(alpha=0)
         '''
         self.addChipObject(self.test_sprite)
+
+        self.bub_test=ch.ChipObjectCircle(ch.BODY_TYPE_KINEMATIC,30,30,(0,0),0,None,0,.99,color=[255,0,0],scene=self)
+        self.bub_test.setPosition(800,-450)
+        self.bub_test.animator.addAnimation('bub',ch.animation('./resources/images/sphere_test_alpha.png','.png'),(-30,-30),.75,fixed_angle=1,static_animation=1)
+        self.addChipObject(self.bub_test)
 
         '''
         self.box_test=ch.ChipObjectBox(ch.BODY_TYPE_DYNAMIC,1,128,128,None,0,None,False,(0,0),scene=self)
@@ -266,20 +296,34 @@ class FizzyScene(ch.ChipSpace,ch.bp.blueprint):
         #self.obstacle3.getChipBody().angle = -3.141592654/4
         self.obstacle3.getChipBody().angle = -3.141592654/2
         self.obstacle3.getChipBody().angular_velocity=-2.5
-        self.obstacle3.animator.addAnimation('david',ch.animation('./resources/images/schwimmer.png','.png'),(-60,-52),static_animation=1)
+        self.obstacle3.animator.addAnimation('david',ch.animation('./resources/images/schwimmer.png','.png'),(-60,-52),static_animation=1, antialias=1)
+        '''
+        self.obstacle3.textManager.setLine(0,'[name]<sup>2</sup>', color='#660088',size=20,align='CENTER', bold=1, face='Impact')
+        self.obstacle3.textManager.setOffsetPosition((-60,-40))
+        self.obstacle3.textManager.setVar('name','Sauci B')
+        self.obstacle3.textManager.updateText(1)
+        '''
+
         self.addChipObject(self.obstacle3)
 
         #self.obstacle3.animator.setOpacity(.5)
+        #self.obstacle3.toggleAnimatorVisibility()
 
         self.little_ball.setStartAngle(0)
         self.little_ball.setSpanAngle(16*325)
         self.little_ball.friction = 1
 
         self.setTimer('DOT', .1, 1)
+        self.setTimer('FPS',.25,1)
+        self.fpsAverage=[60]
 
         self.dots = []
 
         self.__dir_face=1
+
+        #self.text_box=QtGui.QGraphicsTextItem(scene=self)
+        self.text_box=ch.textManager(300,1/4,scene=self)
+        self.text_box.setPos(10,-716)
 
 
     '''
@@ -371,6 +415,41 @@ class FizzyScene(ch.ChipSpace,ch.bp.blueprint):
 
 
     def events(self):
+        if self.getTimerManager().isTimerDelayPassed('FPS',1):
+            '''
+            self.text_box.setFont(QtGui.QFont('Ubuntu Mono',16))
+            num=20
+            ex="(L/A/H) <s>FPS</s>: "+str(int(sorted(list(set(self.fpsAverage)))[0]+.5))+'/'+str(int(sum(self.fpsAverage)/len(self.fpsAverage)+.5))+'/'+str(int(sorted(list(set(self.fpsAverage)))[-1]+.5))+'</font></div>'
+            if len(self.fpsAverage) == num:
+                self.fpsAverage.pop(0)
+            fpsAct=self.getFPSActual()
+            self.fpsAverage.append(fpsAct)
+            self.text_box.setTextWidth(300)
+
+
+            self.text_box.setHtml('FPS: '+str(int(fpsAct+.5))+'/'+str(self.getFPS())+' ('+str(int(fpsAct/self.getFPS()*100+.5))+'%)'+ex)
+            '''
+            num=20
+            fpsAct = self.getFPSActual()
+            fps=self.getFPS()
+            self.fpsAverage.append(int(fpsAct+.5))
+            if len(self.fpsAverage) > num:
+                self.fpsAverage.pop(0)
+
+            fps_min, fps_max = str(sorted(self.fpsAverage)[0]), str(sorted(self.fpsAverage)[-1])
+            fps_ave = str(int(sum(self.fpsAverage)/len(self.fpsAverage)+.5))
+
+
+            
+            fps_perc=" ("+str(int(fpsAct/fps*100+.5))+"%) "
+            self.displayStatus("FPS: " + str(int(fpsAct+.5))+"/"+str(fps)+fps_perc + "Min/Ave/Max - " + fps_min + '/'+ fps_ave + '/' + fps_max)
+        x,y=self.test_sprite.chipBody.position
+        if self.__dir_face:
+            self.bub_test.setPosition(x-22,y-22)
+        else:
+            self.bub_test.setPosition(x+86,y-22)
+
+
         if self.getEvent('SWITCH_ROTATION_SPEED'):
             self.setEvent('SWITCH_ROTATION_SPEED',0)
             self.obstacle3.chipBody.angular_velocity*=-1
@@ -419,10 +498,10 @@ class FizzyScene(ch.ChipSpace,ch.bp.blueprint):
             if not self.getEvent('MOVE_RIGHT'):
                 self.__dir_face=0
                 self.setEvent('IS_IDLE',0)
-                self.ball.getChipBody().angular_velocity+=-2
-                self.ball2.getChipBody().angular_velocity+=-2
+                self.ball.getChipBody().angular_velocity+=-5
+                self.ball2.getChipBody().angular_velocity+=-5
                 if self.test_sprite.getChipBody().velocity[0]>-120:
-                    self.test_sprite.getChipBody().apply_absolute_impulse_at_local_point((-30,0),(32,56))
+                    self.test_sprite.getChipBody().apply_absolute_impulse_at_local_point((-50,0),(32,56))
                 #self.test_sprite.animator.setCurrentAnimation('power_up_left','default','blast')
                 if not self.getEvent('ATTACK'):
                     self.test_sprite.animator.setCurrentAnimation('walk_left',override_termination_frame = 1)
@@ -433,10 +512,10 @@ class FizzyScene(ch.ChipSpace,ch.bp.blueprint):
             if not self.getEvent('MOVE_LEFT'):
                 self.__dir_face=1
                 self.setEvent('IS_IDLE',0)
-                self.ball.getChipBody().angular_velocity+=2
-                self.ball2.getChipBody().angular_velocity+=2
+                self.ball.getChipBody().angular_velocity+=5
+                self.ball2.getChipBody().angular_velocity+=5
                 if self.test_sprite.getChipBody().velocity[0]<120:
-                    self.test_sprite.getChipBody().apply_absolute_impulse_at_local_point((30,0),(32,56))
+                    self.test_sprite.getChipBody().apply_absolute_impulse_at_local_point((50,0),(32,56))
                 '''
                 self.test_sprite.animator.setCurrentAnimation('power_up_right')
                 self.test_sprite.animator.getCurrentAnimation().setSequenceOnCycleComplete('blast')
@@ -498,29 +577,37 @@ class FizzyScene(ch.ChipSpace,ch.bp.blueprint):
         self.little_ball.chipBody.apply_absolute_impulse_at_local_point(imp,(0,0))
         self.little_ball.chipBody.angle = self.little_ball.chipBody.getAngleToWorldPoint((380,-450)) - ch.math.pi/8
 
+        '''
 
         if self.getTimerManager().getTimerDelayPassed('DOT'):
-            dot = QtGui.QGraphicsEllipseItem(QtCore.QRectF(0,0,5,5), scene = self)
-            dot.setBrush(QtGui.QColor(0,0,0))
+            d=None
+            if len(self.dots) > 400:
+                d=self.dots.pop(0)
+                self.dots[10].setBrush(QtGui.QColor(255,255,255))
+                self.dots[10].setPen(QtGui.QColor(255,255,255))
+                self.dots[25].setBrush(QtGui.QColor(0,0,200))
+                self.dots[25].setPen(QtGui.QColor(0,0,200))
+                self.dots[35].setBrush(QtGui.QColor(0,200,0))
+                self.dots[35].setPen(QtGui.QColor(0,200,0))
+                self.dots[45].setBrush(QtGui.QColor(200,200,0))
+                self.dots[45].setPen(QtGui.QColor(200,200,0))
+                self.dots[55].setBrush(QtGui.QColor(255,0,0))
+                self.dots[55].setPen(QtGui.QColor(255,0,0))
+            if d:
+                dot=d
+            else:
+                dot = QtGui.QGraphicsEllipseItem(QtCore.QRectF(0,0,5,5), scene = self)
+                dot.setBrush(QtGui.QColor(0,0,0))
+
+
+
             x,y = self.little_ball.chipBody.position
             dot.setPos(QtCore.QPointF(x-2,y-2))
             self.dots.append(dot)
+        '''
 
-        if len(self.dots) > 400:
-            d=self.dots.pop(0)
-            self.dots[10].setBrush(QtGui.QColor(255,255,255))
-            self.dots[10].setPen(QtGui.QColor(255,255,255))
-            self.dots[25].setBrush(QtGui.QColor(0,0,200))
-            self.dots[25].setPen(QtGui.QColor(0,0,200))
-            self.dots[35].setBrush(QtGui.QColor(0,200,0))
-            self.dots[35].setPen(QtGui.QColor(0,200,0))
-            self.dots[45].setBrush(QtGui.QColor(200,200,0))
-            self.dots[45].setPen(QtGui.QColor(200,200,0))
-            self.dots[55].setBrush(QtGui.QColor(255,0,0))
-            self.dots[55].setPen(QtGui.QColor(255,0,0))
-            self.removeItem(d)
-            
-            
+                
+                
 
         '''
         vec = -800
