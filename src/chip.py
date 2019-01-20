@@ -200,6 +200,8 @@ class ChipObjectSegment(QtGui.QGraphicsRectItem, pm.Segment, bp.blueprint):
         self.add_self_to_catalog()
         self.__update_object=True
         self.updateChipObject(1)
+        self.ucoi=self.__updateChipObject_Internal
+
 
     def __center_of_grav(self):
         return self.cog
@@ -253,20 +255,27 @@ class ChipObjectSegment(QtGui.QGraphicsRectItem, pm.Segment, bp.blueprint):
             self.chipBody.position=(x_or_tuple,y)
         self.updateChipObject(1)
 
+    def __updateChipObject_Segment(self):
+        x,y=self.chipBody.position
+        x,y=self.bod_segs[0],self.bod_segs[1]
+        self.setPos(x,y)
+        self.chipBody.center_of_gravity=(self.cx,self.cy)
+
+        r=(self.chipBody.angle+self.line_angle_adjustment)/(2*3.14159265)*360
+        trans=QtGui.QTransform()
+        trans.rotate(r)
+        self.setTransform(trans)
+        self.__update_object=False
+     
+
+    def __updateChipObject_Internal(self):
+        self.events()
+        #self.__updateChipObject_InUse()
+
     def updateChipObject(self, force_update=False):
         self.events()
-
         if self.__update_object or force_update:
-            x,y=self.chipBody.position
-            x,y=self.bod_segs[0],self.bod_segs[1]
-            self.setPos(x,y)
-            self.chipBody.center_of_gravity=(self.cx,self.cy)
-
-            r=(self.chipBody.angle+self.line_angle_adjustment)/(2*3.14159265)*360
-            trans=QtGui.QTransform()
-            trans.rotate(r)
-            self.setTransform(trans)
-            self.__update_object=False
+            self.__updateChipObject_Segment()
         #self.translate(-self.cx,-self.cy)
         #self.translate(self.cx*2,self.cy*2)
 
@@ -287,7 +296,7 @@ class ChipObjectSegmentChainGenerator():
             for i in range(len(vertices)-1):
                 self.chain_segments.append(ChipObjectSegment(a_point_or_tuple=vertices[i],b_point=vertices[i+1],radius=radius,friction=friction,elasticity=elasticity,density=density,color=color,scene=scene,resource_ref_name=resource_ref_name,prefix=prefix or "ch_obj_seg_chain"))
                 if rounded_corners:
-                    corner=ChipObjectCircle(BODY_TYPE_STATIC,1,radius,(0,0),0,density,friction,elasticity,color,scene,resource_ref_name,prefix or "ch_obj_seg_chain")
+                    corner=ChipObjectCircle(BODY_TYPE_STATIC,1,radius,(0,0),0,density,friction,elasticity,color, False, scene,resource_ref_name,prefix or "ch_obj_seg_chain")
                     corner.chipBody.position=tuple(vertices[i+1])
                     self.chain_segments.append(corner)
 
@@ -295,7 +304,7 @@ class ChipObjectSegmentChainGenerator():
             self.chain_segments.append(ChipObjectSegment(a_point_or_tuple=vertices[-1],b_point=vertices[0],radius=radius,friction=friction,elasticity=elasticity,density=density,color=color,scene=scene,resource_ref_name=resource_ref_name,prefix=prefix or "ch_obj_seg_chain"))
 
         if rounded_corners:
-            corner=ChipObjectCircle(BODY_TYPE_STATIC,1,radius,(0,0),0,density,friction,elasticity,color,scene,resource_ref_name,prefix or "ch_obj_seg_chain")
+            corner=ChipObjectCircle(BODY_TYPE_STATIC,1,radius,(0,0),0,density,friction,elasticity,color,False,scene,resource_ref_name,prefix or "ch_obj_seg_chain")
             corner.chipBody.position=tuple(vertices[0])
             self.chain_segments.append(corner)
 
@@ -305,13 +314,15 @@ class ChipObjectSegmentChainGenerator():
 
 
 class ChipObjectPolygon(QtGui.QGraphicsPolygonItem,pm.Poly,bp.blueprint):
-    def __init__(self,body_type=BODY_TYPE_DYNAMIC,mass=1,vertices=[],center_of_grav=None,radius=0, transform=None, offset=None, density=None,friction=None,elasticity=None,color=None,scene=None,resource_ref_name=None, prefix=None):
+    def __init__(self,body_type=BODY_TYPE_DYNAMIC,mass=1,vertices=[],center_of_grav=None,radius=0, transform=None, offset=None, density=None,friction=None,elasticity=None,color=None, animator_enabled=True, text_manager_enabled=False, scene=None,resource_ref_name=None, prefix=None):
         self.__body_type=body_type
         self.__verts = self.__generate_coords(vertices)
         QtGui.QGraphicsPolygonItem.__init__(self, self.__generate_coords(vertices,1), scene=scene)
         self.__color=[0,0,0,255]
         self.__collison_box_visible=True
         self.__animator_visible=True
+        self.__animator_enabled=animator_enabled
+        self.__text_manager_enabled = text_manager_enabled
 
         bp.blueprint.__init__(self, prefix or 'ch_obj_poly')
         self.__eventManager=bp.eventManager()
@@ -351,12 +362,21 @@ class ChipObjectPolygon(QtGui.QGraphicsPolygonItem,pm.Poly,bp.blueprint):
         self.set_ref_name(resource_ref_name)
         self.add_self_to_catalog()
         
-        self.animator=animationManager(self,scene)
-        self.textManager=textManager(self.boundingRect().width(),None,None, self, scene)
+
+        if self.__animator_enabled:
+            self.animator=animationManager(self,scene)
+            self.animator.hide()
+            self.__updateChipObject_InUse=self.__updateChipObject_Animator
+        else:
+            self.__updateChipObject_InUse=self.__updateChipObject_noAnimator
+
+        if self.__text_manager_enabled:
+            self.textManager=textManager(self.boundingRect().width(),None,None, self, scene)
+            self.textManager.hide()
+
         self.hide()
-        self.animator.hide()
-        self.textManager.hide()
         self.updateChipObject(1)
+        self.ucoi=self.__updateChipObject_Internal
 
     def __center_of_grav(self):
         return self.cog
@@ -421,20 +441,21 @@ class ChipObjectPolygon(QtGui.QGraphicsPolygonItem,pm.Poly,bp.blueprint):
         return False
 
     def toggleAnimatorVisibility(self,visible=None):
-        if visible==None:
-            self.__animator_visible = not self.__animator_visible
-        elif visible in [0,1,True,False]:
-            self.__animator_visible = visible
+        if self.__animator_enabled:
+            if visible==None:
+                self.__animator_visible = not self.__animator_visible
+            elif visible in [0,1,True,False]:
+                self.__animator_visible = visible
 
-        if type(visible)==float:
-            self.animator.setOpacity(visible)
-        else:
-            self.animator.setOpacity(1)
+            if type(visible)==float:
+                self.animator.setOpacity(visible)
+            else:
+                self.animator.setOpacity(1)
 
-        if self.__animator_visible:
-            self.animator.show()
-            return True
-        self.animator.hide()
+            if self.__animator_visible:
+                self.animator.show()
+                return True
+            self.animator.hide()
         return False
 
 
@@ -476,23 +497,29 @@ class ChipObjectPolygon(QtGui.QGraphicsPolygonItem,pm.Poly,bp.blueprint):
             self.chipBody.position=(x_or_tuple,y)
         self.updateChipObject(1)
 
+    def __updateChipObject_noAnimator(self):
+        x,y=self.chipBody.position
+        self.chipBody.center_of_gravity=(self.cx,self.cy)
+        
+        r=self.chipBody.angle/(2*3.14159265)*360
+        
+        trans=QtGui.QTransform()
+        trans.rotate(r)
+        self.setTransform(trans)
+        self.setPos(x,y)
+
+    def __updateChipObject_Animator(self):
+        self.__updateChipObject_noAnimator()
+        self.animator.updateAnimation()
+
+    def __updateChipObject_Internal(self):
+        self.events()
+        self.__updateChipObject_InUse()
+
     def updateChipObject(self, force_update=False):
         self.events()
-        
         if self.__body_type != BODY_TYPE_STATIC or force_update:
-            x,y=self.chipBody.position
-            self.chipBody.center_of_gravity=(self.cx,self.cy)
-            
-            r=self.chipBody.angle/(2*3.14159265)*360
-            
-            trans=QtGui.QTransform()
-            trans.rotate(r)
-            self.setTransform(trans)
-            self.setPos(x,y)
-            #self.translate(-self.cx,-self.cy)
-            #self.translate(self.cx*2,self.cy*2)
-        self.animator.updateAnimation()
-        #self.textManager.updateText()
+            self.__updateChipObject_InUse()
 
     def events(self):
         pass
@@ -500,10 +527,10 @@ class ChipObjectPolygon(QtGui.QGraphicsPolygonItem,pm.Poly,bp.blueprint):
 
 
 class chipObjectStarGenerator(ChipObjectPolygon):
-    def __init__(self,body_type=BODY_TYPE_DYNAMIC,mass=1,star_points=5, inner_radius=5, outer_radius=None,center_of_grav=None,corner_radius=0, transform=None, offset=None, density=None,friction=None,elasticity=None,color=None,scene=None,resource_ref_name=None, prefix=None):
+    def __init__(self,body_type=BODY_TYPE_DYNAMIC,mass=1,star_points=5, inner_radius=5, outer_radius=None,center_of_grav=None,corner_radius=0, transform=None, offset=None, density=None,friction=None,elasticity=None,color=None, animator_enabled=True, text_manager_enabled=False, scene=None,resource_ref_name=None, prefix=None):
         self.corner_radius = corner_radius
 
-        ChipObjectPolygon.__init__(self,body_type,mass,self.__generate_star_coords(star_points, inner_radius, outer_radius), center_of_grav, corner_radius, transform, offset, density, friction, elasticity, color, scene, resource_ref_name, prefix or 'ch_obj_star')
+        ChipObjectPolygon.__init__(self,body_type,mass,self.__generate_star_coords(star_points, inner_radius, outer_radius), center_of_grav, corner_radius, transform, offset, density, friction, elasticity, color, animator_enabled, text_manager_enabled, scene, resource_ref_name, prefix or 'ch_obj_star')
 
     def __generate_star_coords(self, star_points, inner_radius, outer_radius=None):
         tau = 2*math.pi
@@ -545,7 +572,7 @@ class chipObjectStarGenerator(ChipObjectPolygon):
 
 
 class ChipObjectBox(QtGui.QGraphicsRectItem,pm.Poly,bp.blueprint):
-    def __init__(self,body_type=BODY_TYPE_DYNAMIC,mass=1,width=10,height=10,center_of_grav=None, corner_radius = 0, transform=None, rotation_lock=False, rotation=(0,0), density=None,friction=None,elasticity=None,color=None,scene=None,resource_ref_name=None,prefix=None):
+    def __init__(self,body_type=BODY_TYPE_DYNAMIC,mass=1,width=10,height=10,center_of_grav=None, corner_radius = 0, transform=None, rotation_lock=False, rotation=(0,0), density=None,friction=None,elasticity=None,color=None, animator_enabled=True, text_manager_enabled=False,scene=None,resource_ref_name=None,prefix=None):
         self.corner_radius=corner_radius*.75
         QtGui.QGraphicsRectItem.__init__(self,0-self.corner_radius,0-self.corner_radius,width+self.corner_radius,height+self.corner_radius,scene=scene)
         #QtGui.QGraphicsRectItem.__init__(self,-width/2,-height/2,width/2,height/2,scene=scene)
@@ -558,6 +585,8 @@ class ChipObjectBox(QtGui.QGraphicsRectItem,pm.Poly,bp.blueprint):
         self.__color=[0,0,0,255]
         self.__collison_box_visible=True
         self.__animator_visible=True
+        self.__animator_enabled=animator_enabled
+        self.__text_manager_enabled=text_manager_enabled
 
 
         bp.blueprint.__init__(self,prefix or 'ch_obj_box')
@@ -594,14 +623,28 @@ class ChipObjectBox(QtGui.QGraphicsRectItem,pm.Poly,bp.blueprint):
             self.setPenColor(color=self.__color)
 
         self.set_ref_name(resource_ref_name)
-        self.add_self_to_catalog()
 
-        self.animator=animationManager(self,scene)
-        self.textManager=textManager(self.boundingRect().width(),None,None, self, scene)
+        if self.__animator_enabled:
+            self.animator=animationManager(self,scene)
+            self.animator.hide()
+            if self.__rotation_lock:
+                self.__updateChipObject_InUse=self.__updateChipObject_Animator_rotationLock
+            else:
+                self.__updateChipObject_InUse=self.__updateChipObject_Animator_noRotationLock
+        else:
+            if self.__rotation_lock:
+                self.__updateChipObject_InUse=self.__updateChipObject_noAnimator_rotationLock
+            else:
+                self.__updateChipObject_InUse=self.__updateChipObject_noAnimator_noRotationLock
+
+        if self.__text_manager_enabled:
+            self.textManager=textManager(self.boundingRect().width(),None,None, self, scene)
+            self.textManager.hide()
+        
         self.hide()
-        self.animator.hide()
-        self.textManager.hide()
         self.updateChipObject(1)
+        self.add_self_to_catalog()
+        self.ucoi=self.__updateChipObject_Internal
 
     def __center_of_grav(self):
         return self.cog
@@ -657,20 +700,21 @@ class ChipObjectBox(QtGui.QGraphicsRectItem,pm.Poly,bp.blueprint):
         return False
 
     def toggleAnimatorVisibility(self,visible=None):
-        if visible==None:
-            self.__animator_visible = not self.__animator_visible
-        elif visible in [0,1,True,False]:
-            self.__animator_visible = visible
+        if self.__animator_enabled:
+            if visible==None:
+                self.__animator_visible = not self.__animator_visible
+            elif visible in [0,1,True,False]:
+                self.__animator_visible = visible
 
-        if type(visible)==float:
-            self.animator.setOpacity(visible)
-        else:
-            self.animator.setOpacity(1)
+            if type(visible)==float:
+                self.animator.setOpacity(visible)
+            else:
+                self.animator.setOpacity(1)
 
-        if self.__animator_visible:
-            self.animator.show()
-            return True
-        self.animator.hide()
+            if self.__animator_visible:
+                self.animator.show()
+                return True
+            self.animator.hide()
         return False
 
 
@@ -712,6 +756,51 @@ class ChipObjectBox(QtGui.QGraphicsRectItem,pm.Poly,bp.blueprint):
             self.chipBody.position=(x_or_tuple,y)
         self.updateChipObject(1)
 
+    def __updateChipObject_noAnimator_noRotationLock(self):
+        x,y=self.chipBody.position
+        self.chipBody.center_of_gravity=(self.cx,self.cy)
+        
+        r=self.chipBody.angle/(2*3.14159265)*360
+        trans=QtGui.QTransform()
+        trans.rotate(r)
+        self.setTransform(trans)
+        self.setPos(x,y)
+     
+    def __updateChipObject_noAnimator_rotationLock(self):
+        x,y=self.chipBody.position
+        self.chipBody.center_of_gravity=(self.cx,self.cy)
+
+        r=self.chipBody.angle/(2*3.14159265)*360
+        trans=QtGui.QTransform()
+        trans.rotate(r)
+        self.setTransform(trans)
+        if self.chipBody.angle <= self.__rotation_min:
+            self.chipBody.angle = self.__rotation_min
+        elif self.chipBody.angle >= self.__rotation_max:
+            self.chipBody.angle = self.__rotation_max
+        self.setPos(x,y)
+                
+
+ 
+    def __updateChipObject_Animator_noRotationLock(self):
+        self.__updateChipObject_noAnimator_noRotationLock()
+        self.animator.updateAnimation()
+
+    def __updateChipObject_Animator_rotationLock(self):
+        self.__updateChipObject_noAnimator_rotationLock()
+        self.animator.updateAnimation()
+
+    def __updateChipObject_Internal(self):
+        self.events()
+        self.__updateChipObject_InUse()
+
+    def updateChipObject(self, force_update=False):
+        self.events()
+        if self.__body_type != BODY_TYPE_STATIC or force_update:
+            self.__updateChipObject_InUse()
+
+    '''
+ 
     def updateChipObject(self, force_update=False):
         self.events()
 
@@ -732,9 +821,12 @@ class ChipObjectBox(QtGui.QGraphicsRectItem,pm.Poly,bp.blueprint):
                     
 
             self.setPos(x,y)
+        self.animator.show()
 
         self.animator.updateAnimation()
         #self.textManager.updateText()
+    
+    '''
 
     def events(self):
         pass
@@ -743,7 +835,7 @@ class ChipObjectBox(QtGui.QGraphicsRectItem,pm.Poly,bp.blueprint):
 
 
 class ChipObjectCircle(QtGui.QGraphicsEllipseItem,pm.Circle,bp.blueprint):
-    def __init__(self,body_type=BODY_TYPE_DYNAMIC,mass=1,radius=10,offset=(0,0),inner_radius=0,density=None,friction=None,elasticity=None,color=None,scene=None,resource_ref_name=None, prefix=None):
+    def __init__(self,body_type=BODY_TYPE_DYNAMIC,mass=1,radius=10,offset=(0,0),inner_radius=0,density=None,friction=None,elasticity=None,color=None,animator_enabled=True,scene=None,resource_ref_name=None, prefix=None):
         QtGui.QGraphicsEllipseItem.__init__(self,-radius,-radius,radius*2,radius*2)
         self.hide()
         bp.blueprint.__init__(self, prefix or 'ch_obj_cir')
@@ -753,6 +845,7 @@ class ChipObjectCircle(QtGui.QGraphicsEllipseItem,pm.Circle,bp.blueprint):
         self.__color=[0,0,0,255]
         self.__collison_box_visible=True
         self.__animator_visible=True
+        self.__animator_enabled=animator_enabled
 
         inertia = pm.moment_for_circle(mass,inner_radius,radius,offset)
         self.chipBody = ChipBody(mass,inertia,body_type)
@@ -771,11 +864,17 @@ class ChipObjectCircle(QtGui.QGraphicsEllipseItem,pm.Circle,bp.blueprint):
         self.set_ref_name(resource_ref_name)
         self.add_self_to_catalog()
         
-        self.animator=animationManager(self,scene)
+        if self.__animator_enabled:
+            self.animator=animationManager(self,scene)
+            self.animator.hide()
+            self.__updateChipObject_InUse=self.__updateChipObject_Animator
+        else:
+            self.__updateChipObject_InUse=self.__updateChipObject_noAnimator
+
 
         self.hide()
-        self.animator.hide()
         self.updateChipObject(1)
+        self.ucoi=self.__updateChipObject_Internal
 
     def getEventManager(self):
         return self.__eventManager
@@ -823,20 +922,21 @@ class ChipObjectCircle(QtGui.QGraphicsEllipseItem,pm.Circle,bp.blueprint):
         return False
 
     def toggleAnimatorVisibility(self,visible=None):
-        if visible==None:
-            self.__animator_visible = not self.__animator_visible
-        elif visible in [0,1,True,False]:
-            self.__animator_visible = visible
+        if self.__animator_enabled:
+            if visible==None:
+                self.__animator_visible = not self.__animator_visible
+            elif visible in [0,1,True,False]:
+                self.__animator_visible = visible
 
-        if type(visible)==float:
-            self.animator.setOpacity(visible)
-        else:
-            self.animator.setOpacity(1)
+            if type(visible)==float:
+                self.animator.setOpacity(visible)
+            else:
+                self.animator.setOpacity(1)
 
-        if self.__animator_visible:
-            self.animator.show()
-            return True
-        self.animator.hide()
+            if self.__animator_visible:
+                self.animator.show()
+                return True
+            self.animator.hide()
         return False
 
 
@@ -878,19 +978,30 @@ class ChipObjectCircle(QtGui.QGraphicsEllipseItem,pm.Circle,bp.blueprint):
         else:
             self.chipBody.position=(x_or_tuple,y)
         self.updateChipObject(1)
+    
+    def __updateChipObject_noAnimator(self):
+        x,y=self.chipBody.position
+        self.setPos(x,y)
+
+        r=self.chipBody.angle/(2*3.14159265)*360
+        self.translate(-self.radius,-self.radius)
+        self.setRotation(r)
+        self.translate(self.radius,self.radius)
+
+
+    def __updateChipObject_Animator(self):
+        self.__updateChipObject_noAnimator()
+        self.animator.updateAnimation()
+
+    def __updateChipObject_Internal(self):
+        self.events()
+        self.__updateChipObject_InUse()
+
 
     def updateChipObject(self, force_update=False):
         self.events()
         if self.__body_type != BODY_TYPE_STATIC or force_update:
-            x,y=self.chipBody.position
-            self.setPos(x,y)
-
-            r=self.chipBody.angle/(2*3.14159265)*360
-            self.translate(-self.radius,-self.radius)
-            self.setRotation(r)
-            self.translate(self.radius,self.radius)
-
-        self.animator.updateAnimation()
+            self.__updateChipObject_InUse()
 
     def events(self):
         pass
@@ -1140,7 +1251,7 @@ class ChipSpace(QtGui.QGraphicsScene,pm.Space,bp.blueprint):
         self.step(self.getHZ())
         #self.step(1/self.getFPSActual())
         for i in self.__objs_priority:
-            i.updateChipObject()
+            i.ucoi()
         self.__app.processEvents()
         time.sleep(self.getHZ())
 

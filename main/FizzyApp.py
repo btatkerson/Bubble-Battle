@@ -49,7 +49,8 @@ class FizzyScene(ch.ChipSpace,ch.bp.blueprint):
         self.v_bod.setPosition(240,-135)
         self.v_bod.elasticity=.05
         self.v_bod.friction=2
-        self.v_bod.animator.addAnimation('car_bod',ch.animation('./resources/images/car_bod2.png','.png'),(0,-40), static_animation=True, antialias=1)
+        #self.v_bod.animator.addAnimation('car_bod',ch.animation('./resources/images/car_bod2.png','.png'),(0,-40), static_animation=True, antialias=1)
+        self.v_bod.animator.addAnimation('car_bod',ch.animation('./resources/images/car_bod2.png','.png'),(0,-40), animation_type='static', antialias=1)
         #self.v_bod.chipBody.center_of_gravity=(75,20)
         self.v_bod.animator.setCurrentAnimation('car_bod')
         self.addChipObject(self.v_bod)
@@ -81,7 +82,7 @@ class FizzyScene(ch.ChipSpace,ch.bp.blueprint):
 
         #self.ball=ch.chipObjectStarGenerator(ch.BODY_TYPE_DYNAMIC, 20, 20, 20, corner_radius=2, elasticity=0, color=[255,255,0], resource_ref_name='star')
         self.ball = ch.ChipObjectCircle(ch.BODY_TYPE_DYNAMIC,100,30,color=[255,255,0],scene=self,resource_ref_name='ball')
-        self.ball.animator.addAnimation('tire',ch.animation('./resources/images/tire_30.png','.png'),(-30,-30),static_animation=True, antialias=1)
+        self.ball.animator.addAnimation('tire',ch.animation('./resources/images/tire_30.png','.png'),(-30,-30),animation_type='static', antialias=1)
         self.ball.getChipBody().position = (200,-65)
         self.ball.elasticity=.2
         self.ball.friction=10
@@ -91,7 +92,8 @@ class FizzyScene(ch.ChipSpace,ch.bp.blueprint):
         self.addChipObject(self.ball)
 
         self.ball2 = ch.ChipObjectCircle(ch.BODY_TYPE_DYNAMIC,100,30,color=[255,255,0],scene=self,resource_ref_name='ball')
-        self.ball2.animator.addAnimation('tire',ch.animation('./resources/images/tire_30.png','.png'),(-30,-30),fixed_angle=False,static_animation=True, antialias=1)
+        #self.ball2.animator.addAnimation('tire',ch.animation('./resources/images/tire_30.png','.png'),(-30,-30),fixed_angle=False,static_animation=True, antialias=1)
+        self.ball2.animator.addAnimation('tire',ch.animation('./resources/images/tire_30.png','.png'),(-30,-30),animation_type='static', antialias=1)
         self.ball2.animator.setAngleAdjustment(ch.math.pi/8)
         self.ball2.getChipBody().position = (430,-65)
         self.ball2.elasticity=.2
@@ -117,7 +119,7 @@ class FizzyScene(ch.ChipSpace,ch.bp.blueprint):
         self.little_ball.elasticity=.99
         #self.little_ball.animator.addAnimation('coin', ch.animation('./resources/images/spinning-coin-spritesheet.png','.png',1,14,[0,4],1/16),(-50,-50),.575,fixed_angle=0,adjusted_angle=19*ch.math.pi/32)
         #self.little_ball.animator.addAnimation('coin', ch.animation('./resources/images/spinning-coin-spritesheet.png','.png',1,14,[0,12],1/16),(-50,-50),.575,fixed_angle=1,adjusted_angle=0)
-        self.little_ball.animator.addAnimation('sphere', ch.animation('./resources/images/sphere_test_alpha.png','.png'),(-40,-40),1,fixed_angle=1,adjusted_angle=0,static_animation=1)
+        self.little_ball.animator.addAnimation('sphere', ch.animation('./resources/images/sphere_test_alpha.png','.png'),(-40,-40),1,fixed_angle=1,adjusted_angle=0,animation_type='simple')
         self.addChipObject(self.little_ball)
         #self.little_ball.toggleCollisionBoxVisibility()
         self.little_ball.animator.setOpacity(.5)
@@ -177,7 +179,7 @@ class FizzyScene(ch.ChipSpace,ch.bp.blueprint):
         fx=lambda x: 30*ch.math.sin(ch.math.pi/80*x)+20*ch.math.cos(ch.math.pi/180*x+ch.math.pi/12)
         #fx=lambda x: -40*((x-800)/200)**2
         #for i in range(100,1400,5):
-        for i in range(100,1400,20):
+        for i in range(100,1400,50):
             t.append([i,fx(i)-400])
 
         self.seg_chain2=ch.ChipObjectSegmentChainGenerator(t,0,0,2,1,1,0,[0,0,0],self)
@@ -187,29 +189,29 @@ class FizzyScene(ch.ChipSpace,ch.bp.blueprint):
 
         self.little_coin=ch.ChipObjectCircle(ch.BODY_TYPE_DYNAMIC,30,10,(0,0),0,None,0,.99,color=[255,0,0],scene=self)
         self.little_coin.setPosition(770,-690)
-        self.little_coin.animator.addAnimation('coin',ch.animation('./resources/images/spinning-coin-spritesheet.png','.png',1,14,[0,12],1/24),(-13,-13),1/7,fixed_angle=1)
+        self.little_coin.animator.addAnimation('coin',ch.animation('./resources/images/spinning-coin-spritesheet.png','.png',1,14,[0,12]),(-13,-13),1/7,fixed_angle=1)
         self.little_coin.toggleCollisionBoxVisibility()
 
         self.addChipObject(self.little_coin)
 
         self.little_coin2=ch.ChipObjectCircle(ch.BODY_TYPE_DYNAMIC,30,10,(0,0),0,None,0,.99,color=[255,0,0],scene=self)
         self.little_coin2.setPosition(830,-670)
-        self.little_coin2.animator.addAnimation('coin',ch.animation('./resources/images/spinning-coin-spritesheet.png','.png',1,14,[0,12],1/24),(-13,-13),1/7,fixed_angle=1)
+        self.little_coin2.animator.addAnimation('coin',ch.animation('./resources/images/spinning-coin-spritesheet.png','.png',1,14,[0,12]),(-13,-13),1/7,fixed_angle=1)
         self.little_coin2.toggleCollisionBoxVisibility()
 
         self.addChipObject(self.little_coin2)
 
         self.little_coin3=ch.ChipObjectCircle(ch.BODY_TYPE_DYNAMIC,30,10,(0,0),0,None,0,.99,color=[255,0,0],scene=self)
         self.little_coin3.setPosition(930,-770)
-        self.little_coin3.animator.addAnimation('coin',ch.animation('./resources/images/spinning-coin-spritesheet.png','.png',1,14,[0,12],1/24),(-13,-13),1/7,fixed_angle=1)
+        self.little_coin3.animator.addAnimation('coin',ch.animation('./resources/images/spinning-coin-spritesheet.png','.png',1,14,[0,12]),(-13,-13),1/7,fixed_angle=1)
         self.little_coin3.toggleCollisionBoxVisibility()
         self.addChipObject(self.little_coin3)
 
         self.coins=[]
-        for i in range(30):
+        for i in range(50):
             coin=ch.ChipObjectCircle(ch.BODY_TYPE_DYNAMIC,90,10,(0,0),0,None,0,.95,color=[255,0,0],scene=self)
             coin.setPosition(random.randrange(100,1300,20),-random.randrange(600,1000,20))
-            coin.animator.addAnimation('coin',ch.animation('./resources/images/spinning-coin-spritesheet.png','.png',1,14,[0,12],1/24),(-13,-13),1/7,fixed_angle=1)
+            coin.animator.addAnimation('coin',ch.animation('./resources/images/spinning-coin-spritesheet.png','.png',1,14,[0,12]),(-13,-13),1/7,fixed_angle=1,animation_type='simple', time_delay=1/24)
             self.coins.append(coin)
             coin.toggleCollisionBoxVisibility()
 
@@ -220,25 +222,25 @@ class FizzyScene(ch.ChipSpace,ch.bp.blueprint):
 
         self.test_sprite=ch.ChipObjectBox(ch.BODY_TYPE_DYNAMIC,1,16*4,28*4,color=[255,0,0,255],scene=self,resource_ref_name='sprite')
         self.test_sprite.setPosition(800,-400)
-        self.test_sprite.animator.addAnimation('power_up_right',ch.animation('./resources/images/cat_sprite.png','.png',6,10,[10,15],1/12),(-14*4,-12*4),4,termination_frames=[-1])
+        self.test_sprite.animator.addAnimation('power_up_right',ch.animation('./resources/images/cat_sprite.png','.png',6,10,[10,15]),(-14*4,-12*4),4,termination_frames=[-1],animation_type='complex',time_delay=1/12)
         self.test_sprite.animator.getAnimation('power_up_right').addSequence('test',[0,1,2,3,4,5,4,5,4,5,4,5],1)
         self.test_sprite.animator.getAnimation('power_up_right').addSequence('blast',[4,5])
-        self.test_sprite.animator.addAnimation('power_up_left',ch.animation('./resources/images/cat_sprite.png','.png',6,10,[10,15],1/12),(120,-12*4),4,1,termination_frames=[-1])
+        self.test_sprite.animator.addAnimation('power_up_left',ch.animation('./resources/images/cat_sprite.png','.png',6,10,[10,15]),(120,-12*4),4,1,termination_frames=[-1],animation_type='complex',time_delay=1/12)
         self.test_sprite.animator.getAnimation('power_up_left').addSequence('test',[0,1,2,3,4,5,4,5,4,5,4,5],1)
         self.test_sprite.animator.getAnimation('power_up_left').addSequence('blast',[4,5])
 
-        self.test_sprite.animator.addAnimation('idle_right',ch.animation('./resources/images/cat_sprite.png','.png',6,10,None,1/12),(-14*4,-12*4),4,set_animation_to_default=1)
+        self.test_sprite.animator.addAnimation('idle_right',ch.animation('./resources/images/cat_sprite.png','.png',6,10,None,),(-14*4,-12*4),4,set_animation_to_default=1,animation_type='complex',time_delay=1/12)
         self.test_sprite.animator.getAnimation('idle_right').addSequence('test',[0,20,0,21],1)
-        self.test_sprite.animator.addAnimation('idle_left',ch.animation('./resources/images/cat_sprite.png','.png',6,10,None,1/12),(120,-12*4),4,1)
+        self.test_sprite.animator.addAnimation('idle_left',ch.animation('./resources/images/cat_sprite.png','.png',6,10,None,),(120,-12*4),4,1,animation_type='complex',time_delay=1/12)
         self.test_sprite.animator.getAnimation('idle_left').addSequence('test',[0,20,0,21],1)
         self.test_sprite.toggleCollisionBoxVisibility(0,0,2)
         #self.test_sprite.toggleAnimatorVisibility(1)
 
         #self.test_sprite.chipBody.angle=ch.math.pi/2
 
-        self.test_sprite.animator.addAnimation('walk_right',ch.animation('./resources/images/cat_walk.png','.png',1,8,None,1/16),(-23*4,-4*2),4, termination_frames=[-1,4])
+        self.test_sprite.animator.addAnimation('walk_right',ch.animation('./resources/images/cat_walk.png','.png',1,8,None),(-23*4,-4*2),4, termination_frames=[-1,4],animation_type='complex',time_delay=1/16)
 
-        self.test_sprite.animator.addAnimation('walk_left',ch.animation('./resources/images/cat_walk.png','.png',1,8,None,1/16),(18+23*6,-4*2),4,1, termination_frames=[-1,4])
+        self.test_sprite.animator.addAnimation('walk_left',ch.animation('./resources/images/cat_walk.png','.png',1,8,None),(18+23*6,-4*2),4,1, termination_frames=[-1,4], animation_type='complex', time_delay=1/16)
         '''
         self.test_sprite.setBrushColor(alpha=0)
         self.test_sprite.setPenColor(alpha=0)
@@ -247,7 +249,7 @@ class FizzyScene(ch.ChipSpace,ch.bp.blueprint):
 
         self.bub_test=ch.ChipObjectCircle(ch.BODY_TYPE_KINEMATIC,30,30,(0,0),0,None,0,.99,color=[255,0,0],scene=self)
         self.bub_test.setPosition(800,-450)
-        self.bub_test.animator.addAnimation('bub',ch.animation('./resources/images/sphere_test_alpha.png','.png'),(-30,-30),.75,fixed_angle=1,static_animation=1)
+        self.bub_test.animator.addAnimation('bub',ch.animation('./resources/images/sphere_test_alpha.png','.png'),(-30,-30),.75,fixed_angle=1,animation_type='static')
         self.addChipObject(self.bub_test)
 
         '''
@@ -296,7 +298,8 @@ class FizzyScene(ch.ChipSpace,ch.bp.blueprint):
         #self.obstacle3.getChipBody().angle = -3.141592654/4
         self.obstacle3.getChipBody().angle = -3.141592654/2
         self.obstacle3.getChipBody().angular_velocity=-2.5
-        self.obstacle3.animator.addAnimation('david',ch.animation('./resources/images/schwimmer.png','.png'),(-60,-52),static_animation=1, antialias=1)
+        self.obstacle3.animator.addAnimation('david',ch.animation('./resources/images/schwimmer.png','.png'),(-60,-52),adjusted_angle=ch.math.pi/3,animation_type='simple', antialias=1)
+        self.obstacle3.animator.setCurrentAnimation('david')
         '''
         self.obstacle3.textManager.setLine(0,'[name]<sup>2</sup>', color='#660088',size=20,align='CENTER', bold=1, face='Impact')
         self.obstacle3.textManager.setOffsetPosition((-60,-40))

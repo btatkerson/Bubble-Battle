@@ -17,6 +17,18 @@ class animationManager(QtGui.QGraphicsPixmapItem):
         QtGui.QGraphicsPixmapItem.__init__(self, parent=parent, scene=scene)
         self.animations={'default':None}
         self.animation_flags={'default':None}
+        self.animation_flags['default']={'offset':None,
+                                           'scale':None,
+                                           'flip_horizontal':None,
+                                           'flip_vertical':None,
+                                           'angle_adjustment':None,
+                                           'fixed_angle':None,
+                                           'termination_frames':None,
+                                           'animation_type':'static',
+                                           'time_delay':None,
+                                           'random':None,
+                                           'antialias':None}
+
         self.parent=parent
         self.current_animation = ""
         self.animation_playing=False
@@ -27,7 +39,9 @@ class animationManager(QtGui.QGraphicsPixmapItem):
         self.rotation_lock = False
 
         self.__updated_transformations = False
-        self.__animations_null = True
+        self.__updater=self.__nullPass
+
+        self.__timerMng = timerManager()
 
     def getCurrentAnimationCycleComplete(self):
         return self.getCurrentAnimation().isCycleComplete()
@@ -49,12 +63,12 @@ class animationManager(QtGui.QGraphicsPixmapItem):
 
         if animation_tag in self.animations.keys():
             self.animations['default']=self.animations[animation_tag]
-            self.animation_flags['default']=self.animation_flags[animation_tag]
+            self.animation_flags['default']=self.animation_flags[self.current_animation][animation_tag]
             return self.animations['default']
         return None
 
 
-    def addAnimation(self, animation_tag=None, animation_object=None, offset=(0,0), scale=1, flip_horizontal=False, flip_vertical=False, adjusted_angle=0, fixed_angle=False, termination_frames=[], static_animation=False, simple_animation=True, time_delay=None, random_frames=False, antialias=False, set_animation_to_default=False):
+    def addAnimation(self, animation_tag=None, animation_object=None, offset=(0,0), scale=1, flip_horizontal=False, flip_vertical=False, adjusted_angle=0, fixed_angle=False, termination_frames=[], animation_type=None, time_delay=None, random_frames=False, antialias=False, set_animation_to_default=False):
         '''
         Adds animation to class dictionary, also stores basic transformation in regards to animation transformations
         animation_tag = String - The tag used to reference the animation ie "idle", "walk_right"
@@ -68,8 +82,10 @@ class animationManager(QtGui.QGraphicsPixmapItem):
         adjusted_angle = Float (Radians) - Performs a rotational transformation on the QGraphicsPixmapItem
         fixed_angle = Boolean - Locks the rotation of the QGraphicsPixmapItem
         termination_frames = List - Int Frame numbers that are acceptable to cease current animation and go to the next one. 0 = First Frame, -1 = Last frame
-        static_animation = Boolean - Set this to true if the animation is a single-frame picture to prevent resource demand
-        simple_animation = Boolean - Set this to true to 
+        animation_type = ANIMATION_TYPE - Static - Single frame, no animation, uses least resources
+                                          Simple - Loops through frames but won't track the frame number, new sequence-on-completion, completion factors, etc.
+                                          Complex - Uses the most resources
+        time_delay = int, float - Sets frame rate in seconds. 1 = 1 second, 1/24 = 1/24 seconds. 
         random_frames = Boolean - Set to make animation play random frames of the animation (A twinkling star, for instance)
         antialias = Boolean - Toggle the antialias on animation graphics
         set_animation_to_default = Boolean - set if the new animation being added should be the new default in the manager
@@ -83,7 +99,8 @@ class animationManager(QtGui.QGraphicsPixmapItem):
                                                     'angle_adjustment':adjusted_angle,
                                                     'fixed_angle':fixed_angle,
                                                     'termination_frames':termination_frames,
-                                                    'static_animation':static_animation,
+                                                    'animation_type':animation_type,
+                                                    'time_delay':time_delay,
                                                     'random':random_frames,
                                                     'antialias':antialias}
 
@@ -92,7 +109,6 @@ class animationManager(QtGui.QGraphicsPixmapItem):
                 if self.animations['default']==None or set_animation_to_default:
                     self.animations['default']=animation_object
                     self.animation_flags['default']=self.animation_flags[animation_tag]
-                    self.__animations_null = False
                     self.setCurrentAnimation('default')
 
                 return animation_object
@@ -143,10 +159,8 @@ class animationManager(QtGui.QGraphicsPixmapItem):
             else:
                 self.offset_adjustment=(0,0)
 
-            if self.animation_flags[animation_tag]['static_animation']:
-                self.static_animation=self.animation_flags[animation_tag]['static_animation']
-            else:
-                self.static_animation=False
+            if self.animation_flags[animation_tag]['time_delay']:
+                self.__timerMng.setTimer(animation_tag, self.animation_flags[animation_tag]['time_delay'],1)
 
 
             self.angle_adjustment=self.animation_flags[animation_tag]['angle_adjustment']
@@ -160,8 +174,52 @@ class animationManager(QtGui.QGraphicsPixmapItem):
 
             self.animations[self.current_animation].setCurrentSequence(sequence)
             self.animations[self.current_animation].setSequenceOnCycleComplete(sequence_after_cycle_complete)
-            self.animations[self.current_animation].timeMng.resetTimer('frame_rate',1)
-            self.updateAnimation(0)
+            #self.animations[self.current_animation].resetTimer('frame_rate',1)
+            self.__timerMng.resetTimer('frame_rate',1)
+
+            if self.animation_flags[self.current_animation]['animation_type'] == self.ANIMATION_TYPE_SIMPLE:
+                self.__updateTransformations() # Initial animation update since it won't update again on it's own
+                if self.animation_flags[self.current_animation]['time_delay']:
+                    if self.animation_flags[self.current_animation]['fixed_angle']:
+                        if self.animation_flags[self.current_animation]['random']:
+                            self.__updater=self.__updateSimpleWithRotationRandom_time
+                        else:
+                            self.__updater=self.__updateSimpleWithRotation_time
+                    else:
+                        if self.animation_flags[self.current_animation]['random']:
+                            self.__updater=self.__updateSimpleWithRandom_time
+                        else:
+                            self.__updater=self.__updateSimple_time
+                else:
+                    if self.animation_flags[self.current_animation]['fixed_angle']:
+                        if self.animation_flags[self.current_animation]['random']:
+                            self.__updater=self.__updateSimpleWithRotationRandom
+                        else:
+                            self.__updater=self.__updateSimpleWithRotation
+                    else:
+                        if self.animation_flags[self.current_animation]['random']:
+                            self.__updater=self.__updateSimpleWithRandom
+                        else:
+                            self.__updater=self.__updateSimple
+            elif self.animation_flags[self.current_animation]['animation_type'] == self.ANIMATION_TYPE_COMPLEX:
+                if self.animation_flags[self.current_animation]['time_delay']:
+                    if self.animation_flags[self.current_animation]['fixed_angle']:
+                            self.__updater=self.__updateComplexWithRotation_time
+                    else:
+                            self.__updater=self.__updateComplex_time
+                else:
+                    if self.animation_flags[self.current_animation]['fixed_angle']:
+                            self.__updater=self.__updateComplexWithRotation
+                    else:
+                            self.__updater=self.__updateComplex
+            else:
+                self.__updateComplexWithRotation()
+                self.__updater=self.__nullPass
+
+
+
+
+            self.updateAnimation()
 
         return self.animations[self.current_animation]
 
@@ -258,9 +316,65 @@ class animationManager(QtGui.QGraphicsPixmapItem):
             self.rotation_lock=False
         return self.rotation_lock
 
-    def updateAnimation(self, frame=None, sequence=None, sequence_after_cycle_complete=None):
-        if self.__animations_null:
-            return None
+    def __nullPass(self):
+        pass
+
+    def __updateSimpleWithRotationRandom(self):
+        self.setPixmap(self.getCurrentAnimation().rotateRandomFrame())
+
+        trans=QtGui.QTransform()
+        ang=self.parent.getChipBody().angle%(2*math.pi)
+        trans.translate(-self.offset_adjustment[0],-self.offset_adjustment[1])
+        trans.rotateRadians(-ang+self.angle_adjustment)
+        trans.translate(self.offset_adjustment[0],self.offset_adjustment[1])
+        trans.scale(self.scale_w, self.scale_h)
+        self.setTransform(trans)
+         
+        return 0
+
+    def __updateSimpleWithRotationRandom_time(self):
+        if self.__timerMng.isTimerDelayPassed(self.current_animation, 1):
+            return self.__updateSimpleWithRotationRandom()
+
+    
+    def __updateSimpleWithRandom(self):
+        self.setPixmap(self.getCurrentAnimation().rotateRandomFrame())
+        return 0
+
+    def __updateSimpleWithRandom_time(self):
+        if self.__timerMng.isTimerDelayPassed(self.current_animation, 1):
+            return self.__updateSimpleWithRandom()
+
+
+    def __updateSimpleWithRotation(self):
+        trans=QtGui.QTransform()
+        ang=self.parent.getChipBody().angle%(2*math.pi)
+        trans.translate(-self.offset_adjustment[0],-self.offset_adjustment[1])
+        trans.rotateRadians(-ang+self.angle_adjustment)
+        trans.translate(self.offset_adjustment[0],self.offset_adjustment[1])
+        trans.scale(self.scale_w, self.scale_h)
+        self.setTransform(trans)
+
+        self.setPixmap(self.getCurrentAnimation().rotateFrame())
+         
+        return 0
+
+    def __updateSimpleWithRotation_time(self):
+        if self.__timerMng.isTimerDelayPassed(self.current_animation, 1):
+            return self.__updateSimpleWithRotation()
+
+    def __updateSimple(self):
+        self.setPixmap(self.getCurrentAnimation().rotateFrame())
+        return 0
+
+    def __updateSimple_time(self):
+        if self.__timerMng.isTimerDelayPassed(self.current_animation, 1):
+            return self.__updateSimple()
+
+    def updateAnimation(self):
+        return self.__updater()
+
+    def __updateTransformations(self):
         if self.__updated_transformations:
             trans=QtGui.QTransform()
             '''
@@ -277,59 +391,52 @@ class animationManager(QtGui.QGraphicsPixmapItem):
             self.setPos(self.offset_adjustment[0],self.offset_adjustment[1])
 
             self.__updated_transformations = False
+            return True
+        return False
+
+    def updateAnimationComplex(self, frame=None, sequence=None, sequence_after_cycle_complete=None):
+        if frame != None:
+            self.getCurrentAnimation().setCurrentFrameNumber(frame)
+            self.setPixmap(self.getCurrentAnimation().getCurrentFrame())
+            return 0
+
+        if sequence != None:
+            self.getCurrentAnimation().setCurrentSequence(sequence)
+
+        if sequence_after_cycle_complete != None:
+            self.getCurrentAnimation().setSequenceOnCycleComplete(sequence_after_cycle_complete)
 
 
-        if self.rotation_lock:
-            trans=QtGui.QTransform()
-            if self.rotation_lock:
-                ang=self.parent.getChipBody().angle%(2*math.pi)
-            else:
-                ang=0
-            trans.translate(-self.offset_adjustment[0],-self.offset_adjustment[1])
-            trans.rotateRadians(-ang+self.angle_adjustment)
-            trans.translate(self.offset_adjustment[0],self.offset_adjustment[1])
-            trans.scale(self.scale_w, self.scale_h)
-            self.setTransform(trans)
-            
-        '''
-        if self.rotation_lock:
-            self.setRotation(0)
-        else:
-            #self.setRotation(self.parent.chipBody.angle/(2*3.14159265)*360)
-            self.setRotation(self.parent.chipBody.angle)
-        if self.rotation_lock:
-            ang=self.parent.getChipBody().angle%(2*math.pi)
-            trans=QtGui.QTransform()
-            trans.rotateRadians(-selfotation()+self.angle_adjustment)
-            print('rotate',self.parent.getChipBody().angle%(2*math.pi))
-            self.setRotation(-self.rotation())
-            self.setTransform(trans)
-        '''
+        self.__updater()
 
-        if not self.static_animation:
-            if frame != None:
-                self.getCurrentAnimation().setCurrentFrameNumber(frame)
-                self.setPixmap(self.getCurrentAnimation().getCurrentFrame())
-                return 0
+    def __updateComplex(self):
+        self.setPixmap(self.getCurrentAnimation().getNextFrame())
+        self.__updateTransformations()
 
-            if sequence != None:
-                self.getCurrentAnimation().setCurrentSequence(sequence)
+    def __updateComplexWithRotation(self):
+        trans=QtGui.QTransform()
+        ang=self.parent.getChipBody().angle%(2*math.pi)
+        trans.translate(-self.offset_adjustment[0],-self.offset_adjustment[1])
+        trans.rotateRadians(-ang+self.angle_adjustment)
+        trans.translate(self.offset_adjustment[0],self.offset_adjustment[1])
+        trans.scale(self.scale_w, self.scale_h)
+        self.setTransform(trans)
+        self.__updateTransformations()
+        
+        self.setPixmap(self.getCurrentAnimation().getNextFrame())
 
-            if sequence_after_cycle_complete != None:
-                self.getCurrentAnimation().setSequenceOnCycleComplete(sequence_after_cycle_complete)
+    def __updateComplex_time(self):
+        if self.__timerMng.isTimerDelayPassed(self.current_animation, 1):
+            return self.__updateComplex()
 
-
-        #self.setPos(self.parent.pos())
-        if self.animation_flags[self.current_animation]['random']:
-            self.setPixmap(self.getCurrentAnimation().getNextFrame(1))
-        else:
-            self.setPixmap(self.getCurrentAnimation().rotateFrame())
-        return 0
+    def __updateComplexWithRotation_time(self):
+        if self.__timerMng.isTimerDelayPassed(self.current_animation, 1):
+            return self.__updateComplexWithRotation()
 
 
 
 class animation():
-    def __init__(self, source=None, file_format=None, rows=1,cols=1, frame_range=None, time_delay=None):
+    def __init__(self, source=None, file_format=None, rows=1,cols=1, frame_range=None):
         '''
         source = str - image/sprite sheet file
         file_format = str - type of image file. ex ('png')
@@ -340,8 +447,6 @@ class animation():
         '''
         
         self.orig_pm=QtGui.QPixmap(source, file_format)
-        self.timeMng = timerManager()
-        self.timeMng.setTimer('frame_rate', time_delay, True)
 
         self.frames=[]
         self.sequences={'original':[],
@@ -461,7 +566,6 @@ class animation():
             self.complete_cycle=0
             return self.sequences[sequence_tag]
         self.current_sequence='default'
-        self.timeMng.resetTimer('frame_rate',1)
         return self.sequences[self.current_sequence]
 
     def getSequenceOnCycleComplete(self):
@@ -476,7 +580,6 @@ class animation():
 
     def setCurrentFrameNumber(self, frame_number=0):
         self.complete_cycle=0
-        self.timeMng.resetTimer('frame_rate',1)
         self.current_frame=frame_number%len(self.getCurrentSequence())
         return self.current_frame
 
@@ -501,50 +604,35 @@ class animation():
     def getFrameByNumber(self, frame_number=None):
         return self.frames[frame_number]
 
-    def isTimerDelayPassed(self):
-        return self.timeMng.isTimerDelayPassed('frame_rate')
-
-    def setTimeDelay(self,time_delay=None, reset_timer=True):
-        if time_delay >= 0:
-            self.timeMng.setTimerDelay('frame_rate',time_delay)
-            if reset_timer:
-                self.timeMng.resetTimer('frame_rate',1)
-
     def rotateFrame(self):
-        self.frames.append(self.frames.pop(0))
+        self.current_frame=(self.current_frame+1)%self.getTotalFrames()
         return self.frames[self.current_frame]
 
-    def getNextFrame(self, random_frame=False):
-        if self.timeMng.isTimerDelayPassed('frame_rate',1):
-            if not random_frame:
-                self.current_frame=(self.current_frame+1)%len(self.getCurrentSequence())
-            else:
-                self.current_frame=random.randint(0,len(self.getCurrentSequence())-1)
+    def rotateRandomFrame(self):
+        self.frames.append(self.frames.pop(random.randrange(0,len(self.frames))))
+        return self.frames[-1]
 
-            if self.current_frame == 0:
-                self.complete_cycle=1
+    def getNextFrame(self):
+        self.current_frame=(self.current_frame+1)%len(self.getCurrentSequence())
 
-                if self.getSequenceOnCycleComplete():
-                    self.setCurrentSequence(self.getSequenceOnCycleComplete())
-                    self.__sequence_on_complete=None
+        if self.current_frame == 0:
+            self.complete_cycle=1
+
+            if self.getSequenceOnCycleComplete():
+                self.setCurrentSequence(self.getSequenceOnCycleComplete())
+                self.__sequence_on_complete=None
 
         return self.frames[self.getCurrentSequence()[self.current_frame]]
 
-    def getLastFrame(self, random_frame=False):
-        if self.timeMng.isTimerDelayPassed('frame_rate',1):
-            if self.current_frame == 0:
-                self.complete_cycle=-1
-                
-                if self.getSequenceOnCycleComplete():
-                    self.setCurrentSequence(self.getCurrentSequence())
-                    self.__sequence_on_complete=None
+    def getLastFrame(self):
+        if self.current_frame == 0:
+            self.complete_cycle=-1
+            
+            if self.getSequenceOnCycleComplete():
+                self.setCurrentSequence(self.getCurrentSequence())
+                self.__sequence_on_complete=None
 
-            if not random_frame:
-                self.current_frame=(self.current_frame-1)%len(self.getCurrentSequence())
-            else:
-                self.current_frame=random.randint(0,len(self.getCurrentSequence())-1)
+        self.current_frame=(self.current_frame-1)%len(self.getCurrentSequence())
 
         return self.frames[self.getCurrentSequence()[self.current_frame]]
         
-    
-
